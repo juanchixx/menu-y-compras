@@ -148,8 +148,8 @@ function render() {
 
   const days = weekDays();
   document.getElementById("weekTitle").innerHTML =
-    (state.tab === "semana" ? "Menú de la semana" : "Compras de la semana") +
-    "<small>" + shortDate(days[0]) + " al " + shortDate(days[6]) + " " + days[6].getFullYear() + "</small>";
+    (state.tab === "semana" ? "Menú de la semana<small>" + shortDate(days[0]) + " al " + shortDate(days[6]) + " " + days[6].getFullYear()
+      : "Compras<small>del " + shortDate(days[0]) + " " + days[0].getFullYear() + " en adelante") + "</small>";
   document.getElementById("tab-semana").setAttribute("aria-selected", state.tab === "semana");
   document.getElementById("tab-compras").setAttribute("aria-selected", state.tab === "compras");
   const pend = pendientes();
@@ -168,7 +168,7 @@ function render() {
     view.appendChild(n);
   }
   view.appendChild(renderHoy());
-  view.appendChild(state.tab === "semana" ? renderSemana(days) : renderCompras(days));
+  view.appendChild(state.tab === "semana" ? renderSemana(days) : renderCompras());
   const colors = el("div", { class: "colors", role: "group", "aria-label": "Color de la app" }, "Color de la app:");
   ACENTOS.forEach(([nombre, hex]) => colors.appendChild(el("button", {
     class: "swatch", style: "background:" + hex, title: nombre, "aria-label": nombre, "aria-pressed": String(state.acento === hex),
@@ -397,24 +397,36 @@ const VERDU = /\b(cebolla|papa|zanahoria|tomate|morr[oó]n|pimiento|ajo|lechuga|
 const CARNI = /\b(carne|bife|pollo|pechuga|milanesa|cerdo|bondiola|vac[ií]o|asado|nalga|peceto|cuadril|chorizo|morcilla|picada|molida|pata|muslo|costilla|matambre|lomo|osobuco|carr[eé])/i;
 function adivinarTipo(t) { if (CARNI.test(t)) return "carni"; if (VERDU.test(t)) return "verdu"; return "super"; }
 
-function itemsSemana(days) {
+// la semana que se ve y todo lo planeado después, así lo de la otra semana ya aparece en la lista
+function itemsCompras() {
   const out = { super: [], verdu: [], carni: [] };
-  days.forEach(d => {
-    const k = key(d), c = state.comidas[k];
-    if (!c) return;
+  const desde = key(state.weekStart), hasta = key(addDays(state.weekStart, 6));
+  Object.keys(state.comidas).filter(k => k >= desde).sort().forEach(k => {
+    const c = state.comidas[k], d = parse(k);
+    const dia = DIAS[d.getDay()] + (k > hasta ? " " + shortDate(d) : "");
     (c.ingredientes || []).forEach(ing => {
-      out[ing.tipo in out ? ing.tipo : "super"].push({ ing, k, plato: c.plato, dia: DIAS[d.getDay()] });
+      out[ing.tipo in out ? ing.tipo : "super"].push({ ing, k, plato: c.plato, dia });
     });
   });
   return out;
 }
+// "Zanahoria" y "zanahoria " son lo mismo: se juntan en un solo renglón con contador
+const normal = t => (t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+function agrupar(list, nombre) {
+  const g = new Map();
+  list.forEach(x => { const n = normal(nombre(x)); if (!g.has(n)) g.set(n, []); g.get(n).push(x); });
+  return [...g.values()];
+}
+const ingsAgrupados = it => ORDEN_TIPOS.reduce((o, t) => (o[t] = agrupar(it[t], x => x.ing.nombre), o), {});
+const extrasAgrupados = () => agrupar(Object.entries(state.extras).sort((a, b) => (a[1].creado || 0) - (b[1].creado || 0)), ([, e]) => e.nombre);
 function pendientes() {
-  const it = itemsSemana(weekDays());
+  const g = ingsAgrupados(itemsCompras());
   let n = 0;
-  ORDEN_TIPOS.forEach(t => it[t].forEach(x => { if (!x.ing.comprado) n++; }));
-  Object.values(state.extras).forEach(e => { if (!e.comprado) n++; });
+  ORDEN_TIPOS.forEach(t => g[t].forEach(xs => { if (xs.some(x => !x.ing.comprado)) n++; }));
+  extrasAgrupados().forEach(es => { if (es.some(([, e]) => !e.comprado)) n++; });
   return n;
 }
+const cuenta = n => n > 1 ? el("span", { class: "cuenta" }, "x" + n) : null;
 
 // pendientes arriba; de los tachados solo los últimos 3 (o 10 con "Ver más"), del más reciente al más viejo
 const verMas = {};
@@ -434,27 +446,34 @@ function listaCompras(box, lk, rows) {
   }
 }
 
-function renderCompras(days) {
-  const it = itemsSemana(days);
+function renderCompras() {
+  const g = ingsAgrupados(itemsCompras());
   const shop = el("div", { class: "shop" });
-  const extras = Object.entries(state.extras).sort((a, b) => (a[1].creado || 0) - (b[1].creado || 0));
+  const extras = extrasAgrupados();
 
   ["super", "verdu", "carni"].forEach(t => {
-    const list = it[t].slice().sort((a, b) => a.ing.comprado - b.ing.comprado);
+    const list = g[t];
     const extrasT = t === "super" ? extras : [];
     const total = list.length + extrasT.length;
-    const faltan = list.filter(x => !x.ing.comprado).length + extrasT.filter(([, e]) => !e.comprado).length;
+    const faltan = list.filter(xs => xs.some(x => !x.ing.comprado)).length + extrasT.filter(es => es.some(([, e]) => !e.comprado)).length;
     const box = el("section", { class: "store s-" + t });
     box.appendChild(el("div", { class: "store-head" }, el("h2", {}, TIPOS[t]), el("span", { class: "n" }, total ? faltan + " de " + total + " por comprar" : "")));
 
     if (t === "super") box.appendChild(el("div", { class: "sub" }, "Para el menú"));
-    if (!list.length) box.appendChild(el("p", { class: "empty" }, "Nada del menú de esta semana."));
+    if (!list.length) box.appendChild(el("p", { class: "empty" }, "Nada del menú por ahora."));
     else {
-      listaCompras(box, "menu-" + t, list.map(x => {
+      listaCompras(box, "menu-" + t, list.map(xs => {
+        const x = xs[0], comprado = xs.every(y => y.ing.comprado);
         const id = "chk-" + x.k + "-" + x.ing.id;
-        return { comprado: !!x.ing.comprado, en: x.ing.compradoEn, li: el("li", { class: "item" + (x.ing.comprado ? " done" : "") },
-          el("input", { type: "checkbox", id, checked: !!x.ing.comprado, onchange: e => { x.ing.comprado = e.target.checked; x.ing.compradoEn = e.target.checked ? Date.now() : null; saveComida(x.k); } }),
-          el("label", { for: id }, el("span", { class: "what" }, x.ing.nombre), el("span", { class: "why" }, x.dia + (x.plato ? " · " + x.plato : "")))) };
+        const marcar = e => {
+          const v = e.target.checked, ahora = Date.now();
+          xs.forEach(y => { y.ing.comprado = v; y.ing.compradoEn = v ? ahora : null; });
+          [...new Set(xs.map(y => y.k))].forEach(saveComida);
+        };
+        return { comprado, en: Math.max(...xs.map(y => y.ing.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
+          el("input", { type: "checkbox", id, checked: comprado, onchange: marcar }),
+          el("label", { for: id }, el("span", { class: "what" }, x.ing.nombre, cuenta(xs.length)),
+            el("span", { class: "why" }, xs.map(y => y.dia + (y.plato ? " · " + y.plato : "")).join(", ")))) };
       }));
     }
 
@@ -462,12 +481,17 @@ function renderCompras(days) {
       box.appendChild(el("div", { class: "sub" }, "Otras cosas para la casa"));
       if (!extras.length) box.appendChild(el("p", { class: "empty" }, "Sumá lo que falte: limpieza, desayuno, lo que sea."));
       else {
-        listaCompras(box, "extras", extras.map(([eid, e]) => {
+        listaCompras(box, "extras", extras.map(es => {
+          const [eid, e] = es[0], comprado = es.every(([, y]) => y.comprado);
           const id = "ext-" + eid;
-          return { comprado: !!e.comprado, en: e.compradoEn, li: el("li", { class: "item" + (e.comprado ? " done" : "") },
-            el("input", { type: "checkbox", id, checked: !!e.comprado, onchange: ev => { e.comprado = ev.target.checked; e.compradoEn = ev.target.checked ? Date.now() : null; saveExtra(eid); } }),
-            el("label", { for: id }, el("span", { class: "what" }, e.nombre)),
-            el("button", { class: "x", "aria-label": "Quitar " + e.nombre, onclick: () => { delete state.extras[eid]; saveExtra(eid); } }, "×")) };
+          const marcar = ev => {
+            const v = ev.target.checked, ahora = Date.now();
+            es.forEach(([yid, y]) => { y.comprado = v; y.compradoEn = v ? ahora : null; saveExtra(yid); });
+          };
+          return { comprado, en: Math.max(...es.map(([, y]) => y.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
+            el("input", { type: "checkbox", id, checked: comprado, onchange: marcar }),
+            el("label", { for: id }, el("span", { class: "what" }, e.nombre, cuenta(es.length))),
+            el("button", { class: "x", "aria-label": "Quitar " + e.nombre, onclick: () => { es.forEach(([yid]) => { delete state.extras[yid]; saveExtra(yid); }); } }, "×")) };
         }));
       }
       const input = el("input", { id: "add-extra", type: "text", placeholder: "Ej: lavandina, yerba, papel", "aria-label": "Agregar a la lista del súper" });
@@ -480,10 +504,10 @@ function renderCompras(days) {
       };
       input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
       box.appendChild(el("div", { class: "addrow" }, input, el("button", { onclick: add, "aria-label": "Agregar" }, "+")));
-      if (extras.some(([, e]) => e.comprado)) {
+      if (Object.values(state.extras).some(e => e.comprado)) {
         box.appendChild(el("div", { class: "tools" }, el("button", {
           class: "linkbtn",
-          onclick: () => { extras.filter(([, e]) => e.comprado).forEach(([eid]) => { delete state.extras[eid]; saveExtra(eid); }); }
+          onclick: () => { Object.keys(state.extras).filter(eid => state.extras[eid].comprado).forEach(eid => { delete state.extras[eid]; saveExtra(eid); }); }
         }, "Borrar lo ya comprado")));
       }
     }
