@@ -1,0 +1,13 @@
+rules_version = '2';
+// Pegar en Firebase → Firestore → Reglas, cambiando los dos mails por los de ustedes.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function esDeLaCasa() {
+      return request.auth != null
+        && request.auth.token.email in ["MAIL_1@gmail.com", "MAIL_2@gmail.com"];
+    }
+    match /{coleccion}/{id} {
+      allow read, write: if esDeLaCasa() && coleccion in ["comidas", "extras", "config"];
+    }
+  }
+}

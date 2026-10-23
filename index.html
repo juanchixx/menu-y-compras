@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Menú y Compras</title>
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Menú">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="login" id="login" hidden>
+  <form id="loginForm">
+    <h1>Menú y Compras</h1>
+    <p>Entrá con tu mail y contraseña.</p>
+    <label>Mail<input type="email" id="loginEmail" autocomplete="username" required></label>
+    <label>Contraseña<input type="password" id="loginPass" autocomplete="current-password" required></label>
+    <p class="err" id="loginErr" role="alert" hidden></p>
+    <button class="btn" type="submit" id="loginBtn">Entrar</button>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="top-inner">
+      <div class="weekbar">
+        <button class="iconbtn" id="prev" aria-label="Semana anterior">‹</button>
+        <h1 id="weekTitle">Semana<small>&nbsp;</small></h1>
+        <button class="hoybtn" id="hoy">Hoy</button>
+        <button class="iconbtn" id="next" aria-label="Semana siguiente">›</button>
+        <button class="iconbtn" id="menuPersonas" aria-label="Quién cocina" title="Quién cocina"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg></button>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-semana" aria-selected="true">Menú</button>
+        <button class="tab" role="tab" id="tab-compras" aria-selected="false">Compras</button>
+      </div>
+    </div>
+  </header>
+  <main><div class="wrap" id="view"></div></main>
+  <div id="sheet"></div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
