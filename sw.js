@@ -1,5 +1,5 @@
 // Guarda la app para que abra sin conexión. Los datos los maneja Firestore por su cuenta.
-const CACHE = "menu-v2";
+const CACHE = "menu-v3";
 const APP = ["./", "index.html", "style.css", "app.js", "firebase-config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
