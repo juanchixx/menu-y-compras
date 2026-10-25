@@ -424,10 +424,24 @@ function itemsCompras() {
 }
 // "Zanahoria" y "zanahoria " son lo mismo: se juntan en un solo renglón con contador
 const normal = t => (t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+// "cebolla" y "cebollas", "limón" y "limones" también: cada palabra se lleva a una raíz común.
+// Es solo para agrupar, no se muestra; las palabras de menos de 4 letras y las que terminan en -is o -us no se tocan
+const raiz = w => {
+  if (w.length < 4 || /(is|us|ss)$/.test(w)) return w;
+  w = w.replace(/s$/, "");
+  return w.replace(/ce$/, "z").replace(/([lnrdj])e$/, "$1");
+};
+const clave = t => normal(t).split(" ").map(raiz).join(" ");
 function agrupar(list, nombre) {
   const g = new Map();
-  list.forEach(x => { const n = normal(nombre(x)); if (!g.has(n)) g.set(n, []); g.get(n).push(x); });
+  list.forEach(x => { const n = clave(nombre(x)); if (!g.has(n)) g.set(n, []); g.get(n).push(x); });
   return [...g.values()];
+}
+// el nombre que más se repite en el grupo (con empate, el primero que se cargó)
+function nombreComun(xs, nombre) {
+  const c = new Map();
+  xs.forEach(x => { const v = nombre(x).trim(); c.set(v, (c.get(v) || 0) + 1); });
+  return [...c].reduce((a, b) => b[1] > a[1] ? b : a)[0];
 }
 const ingsAgrupados = it => ORDEN_TIPOS.reduce((o, t) => (o[t] = agrupar(it[t], x => nombreIng(x.ing)), o), {});
 const extrasAgrupados = () => agrupar(Object.entries(state.extras).sort((a, b) => (a[1].creado || 0) - (b[1].creado || 0)), ([, e]) => e.nombre);
@@ -487,12 +501,12 @@ function renderCompras() {
     if (!list.length) box.appendChild(el("p", { class: "empty" }, "Nada del menú por ahora."));
     else {
       listaCompras(box, "menu-" + t, list.flatMap(xs => partir(xs, y => y.ing.comprado).map(ps => {
-        const x = ps[0], comprado = !!x.ing.comprado;
+        const x = ps[0], comprado = !!x.ing.comprado, nom = nombreComun(xs, y => nombreIng(y.ing));
         const id = "chk-" + x.k + "-" + x.ing.id;
-        const abrir = () => { state.detalle = { t, n: normal(nombreIng(x.ing)) }; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); };
+        const abrir = () => { state.detalle = { t, n: clave(nombreIng(x.ing)) }; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); };
         return { comprado, en: Math.max(...ps.map(y => y.ing.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
           el("input", { type: "checkbox", id, checked: comprado, onchange: e => marcarIngs(ps, e.target.checked) }),
-          el("label", { for: id }, el("span", { class: "what" }, nombreIng(x.ing), cuenta(sumaCant(ps), ps.length > 1 ? abrir : null)), porQue(ps))) };
+          el("label", { for: id }, el("span", { class: "what" }, nom, cuenta(sumaCant(ps), ps.length > 1 ? abrir : null)), porQue(ps))) };
       })));
     }
 
@@ -501,7 +515,7 @@ function renderCompras() {
       if (!extras.length) box.appendChild(el("p", { class: "empty" }, "Sumá lo que falte: limpieza, desayuno, lo que sea."));
       else {
         listaCompras(box, "extras", extras.flatMap(es => partir(es, ([, y]) => y.comprado).map(ps => {
-          const [eid, e] = ps[0], comprado = !!e.comprado;
+          const [eid, e] = ps[0], comprado = !!e.comprado, nom = nombreComun(es, ([, y]) => y.nombre);
           const id = "ext-" + eid;
           const marcar = ev => {
             const v = ev.target.checked, ahora = Date.now();
@@ -509,8 +523,8 @@ function renderCompras() {
           };
           return { comprado, en: Math.max(...ps.map(([, y]) => y.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
             el("input", { type: "checkbox", id, checked: comprado, onchange: marcar }),
-            el("label", { for: id }, el("span", { class: "what" }, e.nombre, cuenta(ps.length))),
-            el("button", { class: "x", "aria-label": "Quitar " + e.nombre, onclick: () => { ps.forEach(([yid]) => { delete state.extras[yid]; saveExtra(yid); }); } }, "×")) };
+            el("label", { for: id }, el("span", { class: "what" }, nom, cuenta(ps.length))),
+            el("button", { class: "x", "aria-label": "Quitar " + nom, onclick: () => { ps.forEach(([yid]) => { delete state.extras[yid]; saveExtra(yid); }); } }, "×")) };
         })));
       }
       const input = el("input", { id: "add-extra", type: "text", placeholder: "Ej: lavandina, yerba, papel", "aria-label": "Agregar a la lista del súper" });
@@ -538,13 +552,14 @@ function renderCompras() {
 // cada comida que lleva un producto repetido, con su cantidad, para tachar de a una
 function renderDetalle() {
   const { t, n } = state.detalle;
-  const xs = (itemsCompras()[t] || []).filter(x => normal(nombreIng(x.ing)) === n);
+  const xs = (itemsCompras()[t] || []).filter(x => clave(nombreIng(x.ing)) === n);
   if (!xs.length) { state.detalle = null; return; }
   const cerrar = () => { state.detalle = null; render(); };
   sheetEl.appendChild(el("div", { class: "scrim", onclick: cerrar }));
-  const box = el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": nombreIng(xs[0].ing) });
+  const nom = nombreComun(xs, x => nombreIng(x.ing));
+  const box = el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": nom });
   const faltan = xs.filter(x => !x.ing.comprado).length;
-  box.appendChild(el("div", { class: "sheet-head" }, el("h2", {}, nombreIng(xs[0].ing), el("span", { class: "cuenta" }, "x" + sumaCant(xs))), el("button", { class: "x", "aria-label": "Cerrar", onclick: cerrar }, "×")));
+  box.appendChild(el("div", { class: "sheet-head" }, el("h2", {}, nom, el("span", { class: "cuenta" }, "x" + sumaCant(xs))), el("button", { class: "x", "aria-label": "Cerrar", onclick: cerrar }, "×")));
   box.appendChild(el("p", { class: "hint" }, faltan ? (faltan === 1 ? "Falta 1 comida" : "Faltan " + faltan + " comidas") + " de " + xs.length + ". Tachá cada una por separado." : "Ya está todo tachado."));
   const ul = el("ul", { class: "items" });
   xs.forEach(x => {
