@@ -1,5 +1,5 @@
 // Guarda la app para que abra sin conexión. Los datos los maneja Firestore por su cuenta.
-const CACHE = "menu-v5";
+const CACHE = "menu-v6";
 const APP = ["./", "index.html", "style.css", "app.js", "firebase-config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -13,8 +13,9 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === location.origin) {
-    // primero la red, así cada cambio publicado llega enseguida; sin señal, lo guardado
-    e.respondWith(fetch(req).then(r => {
+    // primero la red, así cada cambio publicado llega enseguida; sin señal, lo guardado.
+    // "no-cache" pregunta siempre al servidor: si no, el navegador usa su copia hasta 10 minutos
+    e.respondWith(fetch(req, { cache: "no-cache" }).then(r => {
       if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return r;
     }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match("index.html"))));
