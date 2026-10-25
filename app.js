@@ -336,7 +336,7 @@ function renderSemana(days) {
           class: "chip t-" + ing.tipo, title: "Tocá para cambiar dónde se compra",
           onclick: () => { ing.tipo = ORDEN_TIPOS[(ORDEN_TIPOS.indexOf(ing.tipo) + 1) % 3]; saveComida(k); }
         }, TIPOS[ing.tipo] || "Súper"),
-        el("span", { class: "nm" }, ing.nombre),
+        el("span", { class: "nm" }, nombreIng(ing), cantIng(ing) > 1 ? el("span", { class: "cant" }, " x" + cantIng(ing)) : null),
         el("button", {
           class: "x", "aria-label": "Quitar " + ing.nombre,
           onclick: () => { const cc = comida(k); cc.ingredientes = cc.ingredientes.filter(i => i.id !== ing.id); saveComida(k); }
@@ -348,7 +348,8 @@ function renderSemana(days) {
     const add = () => {
       const v = input.value.trim(); if (!v) return;
       input.value = "";
-      comida(k).ingredientes = [...(comida(k).ingredientes || []), { id: uid(), nombre: v, tipo: adivinarTipo(v), comprado: false }];
+      const { nombre, cantidad } = leerCantidad(v);
+      comida(k).ingredientes = [...(comida(k).ingredientes || []), { id: uid(), nombre, cantidad, tipo: adivinarTipo(nombre), comprado: false }];
       saveComida(k);
     };
     input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
@@ -397,6 +398,16 @@ const VERDU = /\b(cebolla|papa|zanahoria|tomate|morr[oó]n|pimiento|ajo|lechuga|
 const CARNI = /\b(carne|bife|pollo|pechuga|milanesa|cerdo|bondiola|vac[ií]o|asado|nalga|peceto|cuadril|chorizo|morcilla|picada|molida|pata|muslo|costilla|matambre|lomo|osobuco|carr[eé])/i;
 function adivinarTipo(t) { if (CARNI.test(t)) return "carni"; if (VERDU.test(t)) return "verdu"; return "super"; }
 
+// "cebolla 2" es 2 cebollas para esa comida; el número tiene que ir al final, separado por un espacio
+function leerCantidad(t) {
+  const m = /^(.*\S)\s+(\d{1,3})$/.exec(t);
+  return m && +m[2] > 0 ? { nombre: m[1], cantidad: +m[2] } : { nombre: t, cantidad: 1 };
+}
+// los cargados antes no tienen cantidad (es 1), o la tienen escrita en el nombre
+const nombreIng = ing => ing.cantidad ? ing.nombre : leerCantidad(ing.nombre || "").nombre;
+const cantIng = ing => ing.cantidad || leerCantidad(ing.nombre || "").cantidad;
+const sumaCant = xs => xs.reduce((n, x) => n + cantIng(x.ing), 0);
+
 // la semana que se ve y todo lo planeado después, así lo de la otra semana ya aparece en la lista
 function itemsCompras() {
   const out = { super: [], verdu: [], carni: [] };
@@ -418,7 +429,7 @@ function agrupar(list, nombre) {
   list.forEach(x => { const n = normal(nombre(x)); if (!g.has(n)) g.set(n, []); g.get(n).push(x); });
   return [...g.values()];
 }
-const ingsAgrupados = it => ORDEN_TIPOS.reduce((o, t) => (o[t] = agrupar(it[t], x => x.ing.nombre), o), {});
+const ingsAgrupados = it => ORDEN_TIPOS.reduce((o, t) => (o[t] = agrupar(it[t], x => nombreIng(x.ing)), o), {});
 const extrasAgrupados = () => agrupar(Object.entries(state.extras).sort((a, b) => (a[1].creado || 0) - (b[1].creado || 0)), ([, e]) => e.nombre);
 function pendientes() {
   const g = ingsAgrupados(itemsCompras());
@@ -427,9 +438,9 @@ function pendientes() {
   extrasAgrupados().forEach(es => { if (es.some(([, e]) => !e.comprado)) n++; });
   return n;
 }
-// el contador de un renglón con repetidos; si tiene onclick, abre el detalle para tachar de a uno
+// el contador suma las cantidades; si tiene onclick (más de una comida), abre el detalle para tachar de a una
 const cuenta = (n, onclick) => n > 1 ? (onclick
-  ? el("button", { class: "cuenta", title: "Ver cada uno", "aria-label": "Ver los " + n + " por separado", onclick: e => { e.preventDefault(); onclick(); } }, "x" + n)
+  ? el("button", { class: "cuenta", title: "Ver cada comida", "aria-label": "Ver cada comida por separado", onclick: e => { e.preventDefault(); onclick(); } }, "x" + n)
   : el("span", { class: "cuenta" }, "x" + n)) : null;
 // "Martes 8, Pollo con papas · Lunes 26 oct, Pollo" con el día en negrita
 const porQue = xs => el("span", { class: "why" }, ...xs.flatMap((y, i) => [i ? " · " : null, el("b", {}, y.dia), y.plato ? ", " + y.plato : null]));
@@ -478,10 +489,10 @@ function renderCompras() {
       listaCompras(box, "menu-" + t, list.flatMap(xs => partir(xs, y => y.ing.comprado).map(ps => {
         const x = ps[0], comprado = !!x.ing.comprado;
         const id = "chk-" + x.k + "-" + x.ing.id;
-        const abrir = () => { state.detalle = { t, n: normal(x.ing.nombre) }; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); };
+        const abrir = () => { state.detalle = { t, n: normal(nombreIng(x.ing)) }; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); };
         return { comprado, en: Math.max(...ps.map(y => y.ing.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
           el("input", { type: "checkbox", id, checked: comprado, onchange: e => marcarIngs(ps, e.target.checked) }),
-          el("label", { for: id }, el("span", { class: "what" }, x.ing.nombre, cuenta(ps.length, abrir)), porQue(ps))) };
+          el("label", { for: id }, el("span", { class: "what" }, nombreIng(x.ing), cuenta(sumaCant(ps), ps.length > 1 ? abrir : null)), porQue(ps))) };
       })));
     }
 
@@ -524,23 +535,23 @@ function renderCompras() {
   return shop;
 }
 
-// cada vez que aparece un producto repetido, para tachar de a uno
+// cada comida que lleva un producto repetido, con su cantidad, para tachar de a una
 function renderDetalle() {
   const { t, n } = state.detalle;
-  const xs = (itemsCompras()[t] || []).filter(x => normal(x.ing.nombre) === n);
+  const xs = (itemsCompras()[t] || []).filter(x => normal(nombreIng(x.ing)) === n);
   if (!xs.length) { state.detalle = null; return; }
   const cerrar = () => { state.detalle = null; render(); };
   sheetEl.appendChild(el("div", { class: "scrim", onclick: cerrar }));
-  const box = el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": xs[0].ing.nombre });
+  const box = el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": nombreIng(xs[0].ing) });
   const faltan = xs.filter(x => !x.ing.comprado).length;
-  box.appendChild(el("div", { class: "sheet-head" }, el("h2", {}, xs[0].ing.nombre), el("button", { class: "x", "aria-label": "Cerrar", onclick: cerrar }, "×")));
-  box.appendChild(el("p", { class: "hint" }, faltan ? (faltan === 1 ? "Falta 1" : "Faltan " + faltan) + " de " + xs.length + ". Tachá cada uno por separado." : "Ya está todo tachado."));
+  box.appendChild(el("div", { class: "sheet-head" }, el("h2", {}, nombreIng(xs[0].ing), el("span", { class: "cuenta" }, "x" + sumaCant(xs))), el("button", { class: "x", "aria-label": "Cerrar", onclick: cerrar }, "×")));
+  box.appendChild(el("p", { class: "hint" }, faltan ? (faltan === 1 ? "Falta 1 comida" : "Faltan " + faltan + " comidas") + " de " + xs.length + ". Tachá cada una por separado." : "Ya está todo tachado."));
   const ul = el("ul", { class: "items" });
   xs.forEach(x => {
     const id = "det-" + x.k + "-" + x.ing.id;
     ul.appendChild(el("li", { class: "item" + (x.ing.comprado ? " done" : "") },
       el("input", { type: "checkbox", id, checked: !!x.ing.comprado, onchange: e => marcarIngs([x], e.target.checked) }),
-      el("label", { for: id }, el("span", { class: "what" }, x.ing.nombre), porQue([x]))));
+      el("label", { for: id }, el("span", { class: "what" }, nombreIng(x.ing), cuenta(cantIng(x.ing))), porQue([x]))));
   });
   box.appendChild(ul);
   box.addEventListener("keydown", e => { if (e.key === "Escape") cerrar(); });

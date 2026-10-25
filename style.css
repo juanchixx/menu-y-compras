@@ -126,6 +126,8 @@ main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: m
 .ing { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ing .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: .93rem; }
 .ing.bought .nm { text-decoration: line-through; color: var(--muted); }
+.ing .cant { font-weight: 600; color: var(--muted); }
+.sheet-head .cuenta { display: inline-block; margin-left: 8px; font-size: .8rem; font-weight: 600; background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 0 8px; vertical-align: 3px; }
 .chip { border: 0; border-radius: 99px; padding: 2px 10px; font-size: .72rem; font-weight: 600; min-width: 84px; }
 .t-verdu { background: var(--verdu-bg); color: var(--verdu); }
 .t-carni { background: var(--carni-bg); color: var(--carni); }
