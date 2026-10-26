@@ -20,12 +20,30 @@ const COLORES = {
   oliva: { p: "#5a7a12", bg: "#f1f6e4", line: "#d3e2ad" }
 };
 const PERSONAS_INICIALES = [{ id: "Go", nombre: "Gera", color: "lila" }, { id: "Jx", nombre: "Jx", color: "agua" }];
-const TIPOS = { super: "Súper", verdu: "Verdulería", carni: "Carnicería" };
-const ORDEN_TIPOS = ["super", "verdu", "carni"];
+// dónde se compra: lista compartida, igual que las personas; los ingredientes guardan el id.
+// "super" no se puede quitar: ahí caen los ingredientes de un tipo borrado y las cosas sueltas de antes
+const COLORES_TIPO = {
+  gris: { p: "#3f3f46", bg: "#e4e4e7", line: "#d4d4d8" },
+  verde: { p: "#0e793c", bg: "#d1f4e0", line: "#a7e5c2" },
+  rojo: { p: "#c20e4d", bg: "#fdd0df", line: "#f8aec6" },
+  naranja: { p: "#b45309", bg: "#fde8cc", line: "#f8d19c" },
+  azul: { p: "#005bc4", bg: "#dbeafe", line: "#b5d3fb" },
+  violeta: { p: "#7828c8", bg: "#ecdcfb", line: "#d6b9f5" },
+  agua: { p: "#0a7b83", bg: "#d2f1f2", line: "#a6e0e3" },
+  marron: { p: "#7c4a1e", bg: "#f1e2d3", line: "#e0c6ab" }
+};
+const ICONOS_TIPO = ["🛒", "🥬", "🥩", "🥖", "🧀", "🐟", "💊", "🧴", "🍷", "🐾", "🌰", "🛍️"];
+const TIPOS_INICIALES = [
+  { id: "super", nombre: "Súper", color: "gris", icono: "🛒" },
+  { id: "verdu", nombre: "Verdulería", color: "verde", icono: "🥬" },
+  { id: "carni", nombre: "Carnicería", color: "rojo", icono: "🥩" }
+];
+// al agregar uno nuevo se sugiere un ícono por el nombre; después se cambia
+const ICONO_POR_NOMBRE = [[/panad|pan\b|factura/i, "🥖"], [/fiambr|queso|lacteo|lácteo/i, "🧀"], [/pesca|pescad/i, "🐟"], [/farmac|remedio/i, "💊"], [/limpi|perfum/i, "🧴"], [/vino|bebid|licor/i, "🍷"], [/mascot|veterin|perro|gato/i, "🐾"], [/dietet|dietét|granel|semilla/i, "🌰"], [/verdu|frut/i, "🥬"], [/carni|pollo/i, "🥩"]];
 const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-const state = { personas: PERSONAS_INICIALES.map(p => ({ ...p })), menu: false, quitar: null, comidas: {}, extras: {}, tab: "semana", weekStart: monday(new Date()) };
+const state = { personas: PERSONAS_INICIALES.map(p => ({ ...p })), tipos: TIPOS_INICIALES.map(t => ({ ...t })), menu: false, quitar: null, comidas: {}, extras: {}, tab: "semana", weekStart: monday(new Date()) };
 try { if (localStorage.getItem("tab") === "compras") state.tab = "compras"; } catch (e) {}
 
 // color de acento, elegido por cada uno en su dispositivo
@@ -56,6 +74,21 @@ function savePersonas() {
   const body = { lista: limpio(state.personas) };
   serial("personas", () => setDoc(doc(fs, "config", "personas"), body));
 }
+// un tipo que ya no está (o un ingrediente viejo sin tipo) se muestra como Súper
+function tipoDe(id) { return state.tipos.some(t => t.id === id) ? id : "super"; }
+function tipo(id) { return state.tipos.find(t => t.id === tipoDe(id)) || TIPOS_INICIALES[0]; }
+function tvars(t) { const c = COLORES_TIPO[t.color] || COLORES_TIPO.gris; return "--t:" + c.p + ";--t-bg:" + c.bg + ";--t-line:" + c.line; }
+function saveTipos() {
+  render();
+  const body = { lista: limpio(state.tipos) };
+  serial("tipos", () => setDoc(doc(fs, "config", "tipos"), body));
+}
+// lo que está cargado en un tipo: ingredientes de todas las comidas y cosas sueltas
+function usosTipo(id) {
+  const ings = Object.keys(state.comidas).reduce((n, k) => n + (state.comidas[k].ingredientes || []).filter(i => i.tipo === id).length, 0);
+  const extras = Object.values(state.extras).filter(e => e.tipo === id).length;
+  return { ings, extras };
+}
 function comidasDe(id) { return Object.keys(state.comidas).filter(k => state.comidas[k].cocina === id); }
 
 function saveComida(k) {
@@ -84,7 +117,7 @@ function showError(err) {
 
 // ---------- respaldo ----------
 function exportar() {
-  const data = { version: 1, exportado: new Date().toISOString(), personas: state.personas, comidas: state.comidas, extras: state.extras };
+  const data = { version: 1, exportado: new Date().toISOString(), personas: state.personas, tipos: state.tipos, comidas: state.comidas, extras: state.extras };
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
   a.download = "menu-y-compras-" + key(new Date()) + ".json";
@@ -97,6 +130,7 @@ async function importar(file) {
     if (!data || typeof data !== "object" || (!data.comidas && !data.personas)) throw new Error("formato");
     const writes = [];
     if (Array.isArray(data.personas) && data.personas.length) writes.push([doc(fs, "config", "personas"), { lista: data.personas }]);
+    if (Array.isArray(data.tipos) && data.tipos.some(t => t.id === "super")) writes.push([doc(fs, "config", "tipos"), { lista: data.tipos }]);
     Object.entries(data.comidas || {}).forEach(([k, c]) => { if (/^\d{4}-\d{2}-\d{2}$/.test(k)) writes.push([doc(fs, "comidas", k), c]); });
     Object.entries(data.extras || {}).forEach(([id, e]) => writes.push([doc(fs, "extras", id), e]));
     // de a 400 para no pasar el límite de 500 escrituras por lote
@@ -265,6 +299,7 @@ function voltear(k, section) {
 function renderMenu() {
   sheetEl.innerHTML = "";
   if (!state.menu) { if (state.detalle) renderDetalle(); return; }
+  if (state.menu === "tipos") return renderTipos();
   const cerrar = () => { state.menu = false; state.quitar = null; state.aviso = null; render(); document.getElementById("menuPersonas").focus(); };
   sheetEl.appendChild(el("div", { class: "scrim", onclick: cerrar }));
   const box = el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": "Quién cocina" });
@@ -329,6 +364,82 @@ function quitarPersona(id) {
   savePersonas();
 }
 
+function renderTipos() {
+  const cerrar = () => { state.menu = false; state.quitar = null; render(); document.getElementById("menuTipos").focus(); };
+  sheetEl.appendChild(el("div", { class: "scrim", onclick: cerrar }));
+  const box = el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": "Dónde se compra" });
+  box.appendChild(el("div", { class: "sheet-head" }, el("h2", {}, "Dónde se compra"), el("button", { class: "x", "aria-label": "Cerrar", onclick: cerrar }, "×")));
+  const mover = (i, d) => { const l = state.tipos; [l[i], l[i + d]] = [l[i + d], l[i]]; saveTipos(); };
+  state.tipos.forEach((t, i) => {
+    const c = COLORES_TIPO[t.color] || COLORES_TIPO.gris;
+    const row = el("div", { class: "prow", style: "--p-bg:" + c.bg + ";--p-line:" + c.line });
+    const nombre = el("input", {
+      id: "tn-" + t.id, type: "text", "aria-label": "Nombre", maxlength: "20",
+      onchange: e => { const v = e.target.value.trim(); if (v && v !== t.nombre) { t.nombre = v; saveTipos(); } else e.target.value = t.nombre; }
+    });
+    nombre.value = t.nombre;
+    row.appendChild(el("div", { class: "prow-top" },
+      el("span", { class: "tico", "aria-hidden": "true" }, t.icono || ""), nombre,
+      el("button", { class: "mv", "aria-label": "Subir " + t.nombre, title: "Subir", disabled: i === 0, onclick: () => mover(i, -1) }, "↑"),
+      el("button", { class: "mv", "aria-label": "Bajar " + t.nombre, title: "Bajar", disabled: i === state.tipos.length - 1, onclick: () => mover(i, 1) }, "↓"),
+      t.id === "super" ? null : el("button", { class: "x", "aria-label": "Quitar " + t.nombre, title: "Quitar", onclick: () => {
+        const u = usosTipo(t.id);
+        if (u.ings || u.extras) { state.quitar = t.id; render(); } else quitarTipo(t.id);
+      } }, "×")));
+    const cols = el("div", { class: "pcolors", role: "group", "aria-label": "Color de " + t.nombre });
+    Object.keys(COLORES_TIPO).forEach(nc => cols.appendChild(el("button", {
+      style: "background:" + COLORES_TIPO[nc].p, "aria-label": nc, title: nc, "aria-pressed": String(t.color === nc),
+      onclick: () => { t.color = nc; saveTipos(); }
+    })));
+    row.appendChild(cols);
+    const icos = el("div", { class: "picons", role: "group", "aria-label": "Ícono de " + t.nombre });
+    ICONOS_TIPO.forEach(ic => icos.appendChild(el("button", {
+      "aria-label": ic, "aria-pressed": String(t.icono === ic),
+      onclick: () => { t.icono = t.icono === ic ? "" : ic; saveTipos(); }
+    }, ic)));
+    row.appendChild(icos);
+    if (state.quitar === t.id) {
+      const u = usosTipo(t.id), partes = [];
+      if (u.ings) partes.push(u.ings === 1 ? "1 ingrediente" : u.ings + " ingredientes");
+      if (u.extras) partes.push(u.extras === 1 ? "1 cosa suelta" : u.extras + " cosas sueltas");
+      const sup = tipo("super").nombre;
+      row.appendChild(el("div", { class: "warn" },
+        el("span", {}, t.nombre + " tiene " + partes.join(" y ") + ". Si lo quitás, pasan a " + sup + "."),
+        el("div", { class: "btns" },
+          el("button", { class: "btn ghost", onclick: () => { state.quitar = null; render(); } }, "Cancelar"),
+          el("button", { class: "btn danger", onclick: () => quitarTipo(t.id) }, "Pasar a " + sup + " y quitar"))));
+    }
+    box.appendChild(row);
+  });
+  const input = el("input", { id: "nuevo-tipo", type: "text", placeholder: "Agregar (ej: Panadería, Farmacia)", "aria-label": "Nuevo lugar de compra", maxlength: "20" });
+  const add = () => {
+    const v = input.value.trim(); if (!v) return;
+    input.value = "";
+    const usados = state.tipos.map(t => t.color);
+    const color = Object.keys(COLORES_TIPO).find(c => !usados.includes(c)) || "gris";
+    const sug = ICONO_POR_NOMBRE.find(([re]) => re.test(v));
+    state.tipos.push({ id: uid(), nombre: v, color, icono: sug ? sug[1] : "🛍️" });
+    saveTipos();
+  };
+  input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
+  box.appendChild(el("div", { class: "addrow" }, input, el("button", { onclick: add, "aria-label": "Agregar" }, "+")));
+  box.appendChild(el("p", { class: "hint" }, "Los cambios se ven para todos. El orden es el de la pantalla Compras. " + tipo("super").nombre + " no se puede quitar: es donde van las cosas de un lugar que se borra."));
+  box.addEventListener("keydown", e => { if (e.key === "Escape") cerrar(); });
+  sheetEl.appendChild(box);
+}
+// lo cargado en ese lugar pasa al súper, en todas las comidas (también las pasadas)
+function quitarTipo(id) {
+  if (id === "super") return;
+  Object.keys(state.comidas).forEach(k => {
+    const ings = state.comidas[k].ingredientes || [];
+    if (ings.some(i => i.tipo === id)) { ings.forEach(i => { if (i.tipo === id) i.tipo = "super"; }); saveComida(k); }
+  });
+  Object.keys(state.extras).forEach(eid => { if (state.extras[eid].tipo === id) { state.extras[eid].tipo = "super"; saveExtra(eid); } });
+  state.tipos = state.tipos.filter(t => t.id !== id);
+  state.quitar = null;
+  saveTipos();
+}
+
 function renderSemana(days) {
   cargarClima();
   const grid = el("div", { class: "days" });
@@ -363,11 +474,13 @@ function renderSemana(days) {
 
     const ul = el("ul", { class: "ings" });
     (c.ingredientes || []).forEach(ing => {
+      const actualT = tipo(ing.tipo);
+      const chip = el("select", {
+        class: "chip", id: "tipo-" + k + "-" + ing.id, style: tvars(actualT), title: "Tocá para cambiar dónde se compra", "aria-label": "Dónde se compra " + nombreIng(ing),
+        onchange: e => { ing.tipo = e.target.value; saveComida(k); }
+      }, ...state.tipos.map(t => el("option", { value: t.id, selected: t.id === actualT.id }, t.nombre)));
       ul.appendChild(el("li", { class: "ing" + (ing.comprado ? " bought" : "") },
-        el("button", {
-          class: "chip t-" + ing.tipo, title: "Tocá para cambiar dónde se compra",
-          onclick: () => { ing.tipo = ORDEN_TIPOS[(ORDEN_TIPOS.indexOf(ing.tipo) + 1) % 3]; saveComida(k); }
-        }, TIPOS[ing.tipo] || "Súper"),
+        chip,
         el("span", { class: "nm" }, nombreIng(ing), cantIng(ing) > 1 ? el("span", { class: "cant" }, " x" + cantIng(ing)) : null),
         el("button", {
           class: "x", "aria-label": "Quitar " + ing.nombre,
@@ -381,7 +494,7 @@ function renderSemana(days) {
       const v = input.value.trim(); if (!v) return;
       input.value = "";
       const { nombre, cantidad } = leerCantidad(v);
-      comida(k).ingredientes = [...(comida(k).ingredientes || []), { id: uid(), nombre, cantidad, tipo: adivinarTipo(nombre), comprado: false }];
+      comida(k).ingredientes = [...(comida(k).ingredientes || []), { id: uid(), nombre, cantidad, tipo: tipoDe(adivinarTipo(nombre)), comprado: false }];
       saveComida(k);
     };
     input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
@@ -421,7 +534,7 @@ function renderSemana(days) {
     grid.appendChild(section);
   });
   const wrap = el("div", {}, grid);
-  wrap.appendChild(el("p", { class: "hint", style: "margin-top:12px" }, "Tocá la etiqueta de cada ingrediente para elegir si va a la verdulería, la carnicería o el súper."));
+  wrap.appendChild(el("p", { class: "hint", style: "margin-top:12px" }, "Tocá la etiqueta de cada ingrediente para elegir dónde se compra. Los lugares se arman con el botón de la bolsa, arriba."));
   return wrap;
 }
 
@@ -442,14 +555,15 @@ const sumaCant = xs => xs.reduce((n, x) => n + cantIng(x.ing), 0);
 
 // la semana que se ve y todo lo planeado después, así lo de la otra semana ya aparece en la lista
 function itemsCompras() {
-  const out = { super: [], verdu: [], carni: [] };
+  const out = {};
+  state.tipos.forEach(t => { out[t.id] = []; });
   const desde = key(state.weekStart), hasta = key(addDays(state.weekStart, 6));
   Object.keys(state.comidas).filter(k => k >= desde).sort().forEach(k => {
     const c = state.comidas[k], d = parse(k), nd = DIAS[d.getDay()];
     // "Martes 8"; lo de semanas siguientes lleva el mes: "Lunes 26 oct"
     const dia = nd[0].toUpperCase() + nd.slice(1) + " " + (k > hasta ? shortDate(d) : d.getDate());
     (c.ingredientes || []).forEach(ing => {
-      out[ing.tipo in out ? ing.tipo : "super"].push({ ing, k, plato: c.plato, dia });
+      out[tipoDe(ing.tipo)].push({ ing, k, plato: c.plato, dia });
     });
   });
   return out;
@@ -475,13 +589,16 @@ function nombreComun(xs, nombre) {
   xs.forEach(x => { const v = nombre(x).trim(); c.set(v, (c.get(v) || 0) + 1); });
   return [...c].reduce((a, b) => b[1] > a[1] ? b : a)[0];
 }
-const ingsAgrupados = it => ORDEN_TIPOS.reduce((o, t) => (o[t] = agrupar(it[t], x => nombreIng(x.ing)), o), {});
-const extrasAgrupados = () => agrupar(Object.entries(state.extras).sort((a, b) => (a[1].creado || 0) - (b[1].creado || 0)), ([, e]) => e.nombre);
+const ingsAgrupados = it => state.tipos.reduce((o, t) => (o[t.id] = agrupar(it[t.id], x => nombreIng(x.ing)), o), {});
+// las cosas sueltas de antes no tienen tipo: son del súper
+const extrasAgrupados = t => agrupar(Object.entries(state.extras).filter(([, e]) => tipoDe(e.tipo) === t).sort((a, b) => (a[1].creado || 0) - (b[1].creado || 0)), ([, e]) => e.nombre);
 function pendientes() {
   const g = ingsAgrupados(itemsCompras());
   let n = 0;
-  ORDEN_TIPOS.forEach(t => g[t].forEach(xs => { if (xs.some(x => !x.ing.comprado)) n++; }));
-  extrasAgrupados().forEach(es => { if (es.some(([, e]) => !e.comprado)) n++; });
+  state.tipos.forEach(t => {
+    g[t.id].forEach(xs => { if (xs.some(x => !x.ing.comprado)) n++; });
+    extrasAgrupados(t.id).forEach(es => { if (es.some(([, e]) => !e.comprado)) n++; });
+  });
   return n;
 }
 // el contador suma las cantidades; si tiene onclick (más de una comida), abre el detalle para tachar de a una
@@ -519,19 +636,21 @@ function listaCompras(box, lk, rows) {
 function renderCompras() {
   const g = ingsAgrupados(itemsCompras());
   const shop = el("div", { class: "shop" });
-  const extras = extrasAgrupados();
 
-  ["super", "verdu", "carni"].forEach(t => {
+  state.tipos.forEach(tp => {
+    const t = tp.id, esSuper = t === "super";
     const list = g[t];
-    const extrasT = t === "super" ? extras : [];
-    const total = list.length + extrasT.length;
-    const faltan = list.filter(xs => xs.some(x => !x.ing.comprado)).length + extrasT.filter(es => es.some(([, e]) => !e.comprado)).length;
-    const box = el("section", { class: "store s-" + t });
-    box.appendChild(el("div", { class: "store-head" }, el("h2", {}, TIPOS[t]), el("span", { class: "n" }, total ? faltan + " de " + total + " por comprar" : "")));
+    const extras = extrasAgrupados(t);
+    const total = list.length + extras.length;
+    const faltan = list.filter(xs => xs.some(x => !x.ing.comprado)).length + extras.filter(es => es.some(([, e]) => !e.comprado)).length;
+    // en el súper siempre se separa lo del menú de lo de la casa; en los demás, solo si hay de las dos cosas
+    const separar = esSuper || (list.length && extras.length);
+    const box = el("section", { class: "store", style: tvars(tp) });
+    box.appendChild(el("div", { class: "store-head" }, el("h2", { class: tp.icono ? "has-icon" : null }, tp.icono ? el("span", { class: "ico", "aria-hidden": "true" }, tp.icono) : null, tp.nombre), el("span", { class: "n" }, total ? faltan + " de " + total + " por comprar" : "")));
 
-    if (t === "super") box.appendChild(el("div", { class: "sub" }, "Para el menú"));
-    if (!list.length) box.appendChild(el("p", { class: "empty" }, "Nada del menú por ahora."));
-    else {
+    if (separar) box.appendChild(el("div", { class: "sub" }, "Para el menú"));
+    if (!list.length && (esSuper || !extras.length)) box.appendChild(el("p", { class: "empty" }, esSuper ? "Nada del menú por ahora." : "Nada por ahora."));
+    else if (list.length) {
       listaCompras(box, "menu-" + t, list.flatMap(xs => partir(xs, y => y.ing.comprado).map(ps => {
         const x = ps[0], comprado = !!x.ing.comprado, nom = nombreComun(xs, y => nombreIng(y.ing));
         const id = "chk-" + x.k + "-" + x.ing.id;
@@ -542,39 +661,38 @@ function renderCompras() {
       })));
     }
 
-    if (t === "super") {
-      box.appendChild(el("div", { class: "sub" }, "Otras cosas para la casa"));
-      if (!extras.length) box.appendChild(el("p", { class: "empty" }, "Sumá lo que falte: limpieza, desayuno, lo que sea."));
-      else {
-        listaCompras(box, "extras", extras.flatMap(es => partir(es, ([, y]) => y.comprado).map(ps => {
-          const [eid, e] = ps[0], comprado = !!e.comprado, nom = nombreComun(es, ([, y]) => y.nombre);
-          const id = "ext-" + eid;
-          const marcar = ev => {
-            const v = ev.target.checked, ahora = Date.now();
-            ps.forEach(([yid, y]) => { y.comprado = v; y.compradoEn = v ? ahora : null; saveExtra(yid); });
-          };
-          return { comprado, en: Math.max(...ps.map(([, y]) => y.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
-            el("input", { type: "checkbox", id, checked: comprado, onchange: marcar }),
-            el("label", { for: id }, el("span", { class: "what" }, nom, cuenta(ps.length))),
-            el("button", { class: "x", "aria-label": "Quitar " + nom, onclick: () => { ps.forEach(([yid]) => { delete state.extras[yid]; saveExtra(yid); }); } }, "×")) };
-        })));
-      }
-      const input = el("input", { id: "add-extra", type: "text", placeholder: "Ej: lavandina, yerba, papel", "aria-label": "Agregar a la lista del súper" });
-      const add = () => {
-        const v = input.value.trim(); if (!v) return;
-        input.value = "";
-        const eid = uid();
-        state.extras[eid] = { nombre: v, comprado: false, creado: Date.now() };
-        saveExtra(eid);
-      };
-      input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
-      box.appendChild(el("div", { class: "addrow" }, input, el("button", { onclick: add, "aria-label": "Agregar" }, "+")));
-      if (Object.values(state.extras).some(e => e.comprado)) {
-        box.appendChild(el("div", { class: "tools" }, el("button", {
-          class: "linkbtn",
-          onclick: () => { Object.keys(state.extras).filter(eid => state.extras[eid].comprado).forEach(eid => { delete state.extras[eid]; saveExtra(eid); }); }
-        }, "Borrar lo ya comprado")));
-      }
+    if (separar) box.appendChild(el("div", { class: "sub" }, esSuper ? "Otras cosas para la casa" : "Otras cosas"));
+    if (esSuper && !extras.length) box.appendChild(el("p", { class: "empty" }, "Sumá lo que falte: limpieza, desayuno, lo que sea."));
+    else if (extras.length) {
+      listaCompras(box, "extras-" + t, extras.flatMap(es => partir(es, ([, y]) => y.comprado).map(ps => {
+        const [eid, e] = ps[0], comprado = !!e.comprado, nom = nombreComun(es, ([, y]) => y.nombre);
+        const id = "ext-" + eid;
+        const marcar = ev => {
+          const v = ev.target.checked, ahora = Date.now();
+          ps.forEach(([yid, y]) => { y.comprado = v; y.compradoEn = v ? ahora : null; saveExtra(yid); });
+        };
+        return { comprado, en: Math.max(...ps.map(([, y]) => y.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
+          el("input", { type: "checkbox", id, checked: comprado, onchange: marcar }),
+          el("label", { for: id }, el("span", { class: "what" }, nom, cuenta(ps.length))),
+          el("button", { class: "x", "aria-label": "Quitar " + nom, onclick: () => { ps.forEach(([yid]) => { delete state.extras[yid]; saveExtra(yid); }); } }, "×")) };
+      })));
+    }
+    const input = el("input", { id: "add-extra-" + t, type: "text", placeholder: esSuper ? "Ej: lavandina, yerba, papel" : "Agregar a " + tp.nombre, "aria-label": "Agregar a la lista de " + tp.nombre });
+    const add = () => {
+      const v = input.value.trim(); if (!v) return;
+      input.value = "";
+      const eid = uid();
+      state.extras[eid] = { nombre: v, tipo: t, comprado: false, creado: Date.now() };
+      saveExtra(eid);
+    };
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
+    box.appendChild(el("div", { class: "addrow" }, input, el("button", { onclick: add, "aria-label": "Agregar" }, "+")));
+    const comprados = Object.keys(state.extras).filter(eid => state.extras[eid].comprado && tipoDe(state.extras[eid].tipo) === t);
+    if (comprados.length) {
+      box.appendChild(el("div", { class: "tools" }, el("button", {
+        class: "linkbtn",
+        onclick: () => { comprados.forEach(eid => { delete state.extras[eid]; saveExtra(eid); }); }
+      }, "Borrar lo ya comprado")));
     }
     shop.appendChild(box);
   });
@@ -610,7 +728,9 @@ document.getElementById("prev").onclick = () => { state.weekStart = addDays(stat
 document.getElementById("next").onclick = () => { state.weekStart = addDays(state.weekStart, 7); render(); };
 document.getElementById("hoy").onclick = () => { state.weekStart = monday(new Date()); render(); };
 function setTab(t) { state.tab = t; try { localStorage.setItem("tab", t); } catch (e) {} render(); }
-document.getElementById("menuPersonas").onclick = () => { state.menu = true; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); };
+function abrirMenu(m) { state.menu = m; state.quitar = null; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); }
+document.getElementById("menuPersonas").onclick = () => abrirMenu("personas");
+document.getElementById("menuTipos").onclick = () => abrirMenu("tipos");
 document.getElementById("tab-semana").onclick = () => setTab("semana");
 document.getElementById("tab-compras").onclick = () => setTab("compras");
 // al volver a la app después de días, que "Hoy" sea hoy
@@ -657,6 +777,11 @@ onAuthStateChanged(auth, user => {
   unsubs.push(onSnapshot(doc(fs, "config", "personas"), snap => {
     const l = snap.exists() && snap.data().lista;
     if (Array.isArray(l) && l.length) { state.personas = l; render(); }
+  }, onErr));
+  unsubs.push(onSnapshot(doc(fs, "config", "tipos"), snap => {
+    // si todavía no se guardó nunca, quedan los tres de siempre
+    const l = snap.exists() && snap.data().lista;
+    if (Array.isArray(l) && l.some(t => t.id === "super")) { state.tipos = l; render(); }
   }, onErr));
   unsubs.push(onSnapshot(collection(fs, "extras"), snap => {
     const m = {};
