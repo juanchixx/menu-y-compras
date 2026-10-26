@@ -214,6 +214,37 @@ function renderHoy() {
 
 const ICON_NOTA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h5"/></svg>';
 const ICON_VOLVER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
+// clima de Córdoba (Open-Meteo, sin clave): un pedido por carga; los últimos 3 meses y los próximos 16 días
+const CLIMA_URL = "https://api.open-meteo.com/v1/forecast?latitude=-31.4201&longitude=-64.1888&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=America%2FArgentina%2FCordoba&past_days=92&forecast_days=16";
+let clima = null;
+function cargarClima() {
+  if (clima) return;
+  clima = {};
+  fetch(CLIMA_URL).then(r => r.ok ? r.json() : null).then(j => {
+    const dd = j && j.daily; if (!dd || !dd.time) return;
+    dd.time.forEach((k, i) => {
+      const max = dd.temperature_2m_max[i], min = dd.temperature_2m_min[i];
+      if (max != null && min != null) clima[k] = { max: Math.round(max), min: Math.round(min), code: dd.weather_code ? dd.weather_code[i] : null };
+    });
+    render();
+  }).catch(() => {});
+}
+function iconoClima(c) {
+  if (c == null) return "";
+  if (c === 0) return "☀️";
+  if (c <= 2) return "🌤️";
+  if (c === 3) return "☁️";
+  if (c <= 48) return "🌫️";
+  if (c >= 95) return "⛈️";
+  if ((c >= 71 && c <= 77) || c === 85 || c === 86) return "❄️";
+  return "🌧️";
+}
+function climaDia(k) {
+  const w = clima && clima[k];
+  if (!w) return null;
+  return el("span", { class: "clima", title: "Clima en Córdoba: máxima " + w.max + " °C, mínima " + w.min + " °C" },
+    iconoClima(w.code) + " ", el("b", {}, w.max + "°"), " / " + w.min + "°");
+}
 const flipped = new Set();
 function iconBtn(svg, label, onclick, dot) {
   const b = el("button", { class: "iconsm", "aria-label": label, title: label, onclick });
@@ -299,6 +330,7 @@ function quitarPersona(id) {
 }
 
 function renderSemana(days) {
+  cargarClima();
   const grid = el("div", { class: "days" });
   const hoy = key(new Date());
   days.forEach(d => {
@@ -318,7 +350,7 @@ function renderSemana(days) {
       }, p ? p.nombre : "—"));
     });
     card.appendChild(el("div", { class: "day-head" },
-      el("div", { class: "day-name" }, DIAS[d.getDay()], el("span", {}, shortDate(d)), k === hoy ? el("span", { class: "hoy" }, "Hoy") : null),
+      el("div", { class: "day-name" }, DIAS[d.getDay()], el("span", {}, shortDate(d)), k === hoy ? el("span", { class: "hoy" }, "Hoy") : null, climaDia(k)),
       cook));
 
     const plato = el("input", {
