@@ -1,4 +1,4 @@
-/* Layout: barra superior translúcida con semana y control segmentado; días en cards suaves (apiladas en el celu, grilla en pantallas grandes). Tema claro fijo, acento elegible por cada uno. */
+/* Layout: barra superior translúcida con la semana, botonera fija abajo (Hoy, Menú, Compras); días en cards suaves (apiladas en el celu, grilla en pantallas grandes). Tema claro fijo, acento elegible por cada uno. */
 :root {
   color-scheme: light;
   --bg: #f4f4f5;
@@ -24,7 +24,7 @@
 }
 * { box-sizing: border-box; }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
-body { margin: 0; padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
 [hidden] { display: none !important; }
 button, input, textarea { font: inherit; color: inherit; }
@@ -48,12 +48,22 @@ button:active { transform: scale(.97); }
 .iconbtn:hover, .hoybtn:hover { background: var(--field-hover); }
 .hoybtn { border: 0; background: var(--accent-soft); color: var(--accent); border-radius: var(--radius-sm); height: 40px; padding: 0 14px; font-size: .9rem; font-weight: 600; }
 @media (max-width: 400px) { .weekbar { gap: 6px; } .weekbar .iconbtn { width: 36px; } .hoybtn { padding: 0 10px; } }
-.tabs { display: flex; gap: 4px; background: var(--field); border-radius: 12px; padding: 4px; }
-.tab { flex: 1; border: 0; background: none; padding: 8px; border-radius: 9px; font-weight: 600; font-size: .95rem; color: var(--muted); }
-.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
-.tab .count { font-size: .72rem; background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 1px 7px; margin-left: 6px; vertical-align: 1px; }
+/* Botonera de abajo: queda fija; el iPhone le suma el espacio de la barrita de inicio */
+.bottomnav {
+  position: fixed; inset: auto 0 0; z-index: 15;
+  background: rgba(255,255,255,.9); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-top: 1px solid var(--line);
+  padding: 6px max(12px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+}
+.bottomnav-inner { max-width: 520px; margin: 0 auto; display: flex; gap: 4px; }
+.navtab { position: relative; flex: 1; border: 0; background: none; padding: 6px 4px 4px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--muted); font-size: .75rem; font-weight: 600; }
+.navtab svg { width: 24px; height: 24px; padding: 2px 14px; box-sizing: content-box; border-radius: 99px; transition: background-color .15s; }
+.navtab:hover { color: var(--ink); }
+.navtab[aria-selected="true"] { color: var(--accent); }
+.navtab[aria-selected="true"] svg { background: var(--accent-soft); }
+.navtab .badge { position: absolute; top: 2px; left: calc(50% + 10px); min-width: 18px; font-size: .68rem; line-height: 18px; text-align: center; background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 0 5px; }
 
-main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 48px; }
+main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px calc(96px + env(safe-area-inset-bottom, 0px)); }
 .wrap { max-width: 1200px; margin: 0 auto; }
 .notice { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--radius-sm); padding: 10px 12px; font-size: .9rem; margin: 0 0 12px; }
 
@@ -96,6 +106,15 @@ main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: m
 .hoycard .lbl { font-size: .78rem; color: var(--muted); }
 .hoycard .big { font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .hoycard > div { min-width: 0; }
+.hoycard .lbl .clima { margin-left: 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hoycard .lbl .clima b { font-weight: 600; color: var(--ink); }
+.hoyview { max-width: 720px; margin: 0 auto; }
+.hoyview .shop { grid-template-columns: 1fr; }
+.hoynotas { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 16px; margin: 0 0 14px; font-size: .92rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hoy-sub { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; margin: 4px 0 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.hoy-sub span { font-size: .82rem; font-weight: 400; color: var(--muted); }
+.empty-hoy { color: var(--muted); font-size: .92rem; margin: 0; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tools-hoy { display: flex; justify-content: center; margin-top: 14px; }
 .day-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .day-name { font-weight: 700; font-size: 1.05rem; flex: 1; text-transform: capitalize; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .day-name span { font-weight: 400; font-size: .85rem; color: var(--muted); text-transform: none; }

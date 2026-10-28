@@ -44,7 +44,7 @@ const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 const state = { personas: PERSONAS_INICIALES.map(p => ({ ...p })), tipos: TIPOS_INICIALES.map(t => ({ ...t })), menu: false, quitar: null, comidas: {}, extras: {}, tab: "semana", weekStart: monday(new Date()) };
-try { if (localStorage.getItem("tab") === "compras") state.tab = "compras"; } catch (e) {}
+try { const t = localStorage.getItem("tab"); if (t === "compras" || t === "hoy") state.tab = t; } catch (e) {}
 
 // color de acento, elegido por cada uno en su dispositivo
 const ACENTOS = [["Azul", "#006fee"], ["Violeta", "#7828c8"], ["Verde", "#12a150"], ["Rosa", "#e4006f"], ["Naranja", "#e07a00"], ["Grafito", "#3f3f46"]];
@@ -180,14 +180,16 @@ function render() {
   const a = document.activeElement;
   const keep = a && a.id && (view.contains(a) || sheetEl.contains(a)) ? { id: a.id, value: a.value, s: a.selectionStart, e: a.selectionEnd, text: a.type === "text" || a.tagName === "TEXTAREA" } : null;
 
-  const days = weekDays();
+  const days = weekDays(), ahora = new Date();
   document.getElementById("weekTitle").innerHTML =
-    (state.tab === "semana" ? "Menú de la semana<small>" + shortDate(days[0]) + " al " + shortDate(days[6]) + " " + days[6].getFullYear()
+    (state.tab === "hoy" ? "Hoy<small>" + DIAS[ahora.getDay()] + " " + shortDate(ahora) + " " + ahora.getFullYear()
+      : state.tab === "semana" ? "Menú de la semana<small>" + shortDate(days[0]) + " al " + shortDate(days[6]) + " " + days[6].getFullYear()
       : "Compras<small>del " + shortDate(days[0]) + " " + days[0].getFullYear() + " en adelante") + "</small>";
-  document.getElementById("tab-semana").setAttribute("aria-selected", state.tab === "semana");
-  document.getElementById("tab-compras").setAttribute("aria-selected", state.tab === "compras");
-  const pend = pendientes();
-  document.getElementById("tab-compras").innerHTML = "Compras" + (pend ? '<span class="count">' + pend + "</span>" : "");
+  // en Hoy no hay semana para mover
+  ["prev", "hoy", "next"].forEach(id => { document.getElementById(id).hidden = state.tab === "hoy"; });
+  ["hoy", "semana", "compras"].forEach(t => document.getElementById("tab-" + t).setAttribute("aria-selected", state.tab === t));
+  badge("badge-compras", pendientes());
+  badge("badge-hoy", faltanHoy());
 
   view.innerHTML = "";
   if (state.error) {
@@ -201,8 +203,7 @@ function render() {
     n.appendChild(el("button", { class: "linkbtn", onclick: () => { state.deshacer = null; render(); } }, "Cerrar"));
     view.appendChild(n);
   }
-  view.appendChild(renderHoy());
-  view.appendChild(state.tab === "semana" ? renderSemana(days) : renderCompras());
+  view.appendChild(state.tab === "hoy" ? renderVistaHoy() : state.tab === "semana" ? renderSemana(days) : renderCompras());
   const colors = el("div", { class: "colors", role: "group", "aria-label": "Color de la app" }, "Color de la app:");
   ACENTOS.forEach(([nombre, hex]) => colors.appendChild(el("button", {
     class: "swatch", style: "background:" + hex, title: nombre, "aria-label": nombre, "aria-pressed": String(state.acento === hex),
@@ -233,6 +234,8 @@ function el(tag, attrs, ...kids) {
   return n;
 }
 
+function badge(id, n) { const b = document.getElementById(id); b.hidden = !n; b.textContent = n || ""; }
+
 function renderHoy() {
   const d = new Date(), c = state.comidas[key(d)] || {};
   const per = persona(c.cocina), quien = per && per.nombre, plato = c.plato;
@@ -243,7 +246,7 @@ function renderHoy() {
   else big = "Nada planeado para hoy";
   return el("section", { class: "hoycard" + (per ? " has-cook" : ""), style: per ? pvars(per) : null, "aria-label": "Hoy" },
     el("div", { class: "avatar" + (quien && quien.length > 3 ? " long" : ""), "aria-hidden": "true" }, quien ? quien.slice(0, 6) : "—"),
-    el("div", {}, el("div", { class: "lbl" }, "Hoy · " + DIAS[d.getDay()] + " " + shortDate(d)), el("div", { class: "big" }, big)));
+    el("div", {}, el("div", { class: "lbl" }, "Hoy · " + DIAS[d.getDay()] + " " + shortDate(d), climaDia(key(d))), el("div", { class: "big" }, big)));
 }
 
 const ICON_NOTA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h5"/></svg>';
@@ -699,6 +702,46 @@ function renderCompras() {
   return shop;
 }
 
+// lo de la comida de hoy que todavía no se compró
+function faltanHoy() { return ((state.comidas[key(new Date())] || {}).ingredientes || []).filter(i => !i.comprado).length; }
+
+// la comida de hoy y sus ingredientes, separados por dónde se compran; tachar acá es lo mismo que en Compras
+function renderVistaHoy() {
+  cargarClima();
+  const k = key(new Date()), c = state.comidas[k] || {}, ings = c.ingredientes || [];
+  const wrap = el("div", { class: "hoyview" }, renderHoy());
+  if (c.notas) wrap.appendChild(el("p", { class: "hoynotas" }, el("b", {}, "Notas: "), c.notas));
+  if (!ings.length) {
+    wrap.appendChild(el("p", { class: "empty-hoy" }, c.plato ? "Esta comida no tiene ingredientes cargados." : "Todavía no hay nada cargado para hoy.",
+      el("button", { class: "linkbtn", onclick: () => { state.weekStart = monday(new Date()); setTab("semana"); } }, c.plato ? "Cargar ingredientes en el Menú" : "Ir al Menú")));
+  } else {
+    const faltan = faltanHoy();
+    wrap.appendChild(el("h2", { class: "hoy-sub" }, faltan ? "Para comprar hoy" : "Ya está todo comprado para hoy",
+      el("span", {}, faltan ? (faltan === 1 ? "Falta 1 ingrediente" : "Faltan " + faltan + " ingredientes") + " de " + ings.length : "")));
+    const shop = el("div", { class: "shop" });
+    state.tipos.forEach(tp => {
+      const xs = ings.filter(i => tipoDe(i.tipo) === tp.id);
+      if (!xs.length) return;
+      const pend = xs.filter(i => !i.comprado).length;
+      const box = el("section", { class: "store", style: tvars(tp) });
+      box.appendChild(el("div", { class: "store-head" }, el("h2", { class: tp.icono ? "has-icon" : null }, tp.icono ? el("span", { class: "ico", "aria-hidden": "true" }, tp.icono) : null, tp.nombre), el("span", { class: "n" }, pend ? pend + " de " + xs.length + " por comprar" : "Listo")));
+      const ul = el("ul", { class: "items" });
+      [...xs.filter(i => !i.comprado), ...xs.filter(i => i.comprado)].forEach(ing => {
+        const id = "hoy-" + ing.id;
+        ul.appendChild(el("li", { class: "item" + (ing.comprado ? " done" : "") },
+          el("input", { type: "checkbox", id, checked: !!ing.comprado, onchange: e => marcarIngs([{ ing, k }], e.target.checked) }),
+          el("label", { for: id }, el("span", { class: "what" }, nombreIng(ing), cuenta(cantIng(ing))))));
+      });
+      box.appendChild(ul);
+      shop.appendChild(box);
+    });
+    wrap.appendChild(shop);
+  }
+  const pend = pendientes();
+  if (pend) wrap.appendChild(el("div", { class: "tools-hoy" }, el("button", { class: "linkbtn", onclick: () => setTab("compras") }, "Ver toda la lista de compras (" + pend + ")")));
+  return wrap;
+}
+
 // cada comida que lleva un producto repetido, con su cantidad, para tachar de a una
 function renderDetalle() {
   const { t, n } = state.detalle;
@@ -727,10 +770,11 @@ function renderDetalle() {
 document.getElementById("prev").onclick = () => { state.weekStart = addDays(state.weekStart, -7); render(); };
 document.getElementById("next").onclick = () => { state.weekStart = addDays(state.weekStart, 7); render(); };
 document.getElementById("hoy").onclick = () => { state.weekStart = monday(new Date()); render(); };
-function setTab(t) { state.tab = t; try { localStorage.setItem("tab", t); } catch (e) {} render(); }
+function setTab(t) { const otra = state.tab !== t; state.tab = t; try { localStorage.setItem("tab", t); } catch (e) {} render(); if (otra) window.scrollTo(0, 0); }
 function abrirMenu(m) { state.menu = m; state.quitar = null; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); }
 document.getElementById("menuPersonas").onclick = () => abrirMenu("personas");
 document.getElementById("menuTipos").onclick = () => abrirMenu("tipos");
+document.getElementById("tab-hoy").onclick = () => setTab("hoy");
 document.getElementById("tab-semana").onclick = () => setTab("semana");
 document.getElementById("tab-compras").onclick = () => setTab("compras");
 // al volver a la app después de días, que "Hoy" sea hoy
