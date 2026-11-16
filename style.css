@@ -192,6 +192,15 @@ main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: m
 .item .what { overflow-wrap: anywhere; font-weight: 500; }
 .item .why { font-size: .78rem; color: var(--muted); }
 .item.done .what { text-decoration: line-through; color: var(--muted); font-weight: 400; }
+.vista { display: flex; gap: 2px; background: var(--field); border-radius: 99px; padding: 3px; width: fit-content; margin: 0 0 12px auto; }
+.vista button { border: 0; background: none; padding: 5px 14px; border-radius: 99px; font-size: .85rem; font-weight: 600; color: var(--muted); }
+.vista button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.compacta .store-head { padding: 10px 14px 4px; }
+.compacta .store-head h2 { font-size: 1rem; }
+.compacta .items { padding: 0 4px 6px; }
+.compacta .item { padding: 5px 10px; gap: 10px; }
+.compacta .item .cant { flex: none; font-size: .85rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 2.2em; text-align: right; }
+.compacta .item.done .cant { font-weight: 400; }
 .item.fade-1 { opacity: .8; } .item.fade-2 { opacity: .55; } .item.fade-3 { opacity: .3; }
 .vermas { display: flex; justify-content: center; padding: 0 16px 6px; }
 .sub { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 16px 2px; font-weight: 600; }

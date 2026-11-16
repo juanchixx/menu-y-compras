@@ -45,6 +45,8 @@ const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "o
 
 const state = { personas: PERSONAS_INICIALES.map(p => ({ ...p })), tipos: TIPOS_INICIALES.map(t => ({ ...t })), menu: false, quitar: null, comidas: {}, extras: {}, tab: "semana", weekStart: monday(new Date()) };
 try { const t = localStorage.getItem("tab"); if (t === "compras" || t === "hoy") state.tab = t; } catch (e) {}
+// vista de Compras: detallada (con días, platos y para agregar) o compacta (tilde, producto y cantidad); la elige cada uno en su dispositivo
+try { state.compacta = localStorage.getItem("vistaCompras") === "compacta"; } catch (e) {}
 
 // color de acento, elegido por cada uno en su dispositivo
 const ACENTOS = [["Azul", "#006fee"], ["Violeta", "#7828c8"], ["Verde", "#12a150"], ["Rosa", "#e4006f"], ["Naranja", "#e07a00"], ["Grafito", "#3f3f46"]];
@@ -636,7 +638,51 @@ function listaCompras(box, lk, rows) {
   }
 }
 
+function selectorVista() {
+  const cambiar = v => { state.compacta = v; try { localStorage.setItem("vistaCompras", v ? "compacta" : "detallada"); } catch (e) {} render(); };
+  return el("div", { class: "vista", role: "group", "aria-label": "Vista de la lista" },
+    el("button", { "aria-pressed": String(!state.compacta), onclick: () => cambiar(false) }, "Detallada"),
+    el("button", { "aria-pressed": String(!!state.compacta), onclick: () => cambiar(true) }, "Compacta"));
+}
+
+// solo tilde, producto y cantidad; lo del menú y lo suelto de cada lugar van en una misma lista
+function renderComprasCompacta() {
+  const g = ingsAgrupados(itemsCompras());
+  const shop = el("div", { class: "shop compacta" });
+  state.tipos.forEach(tp => {
+    const t = tp.id;
+    const rows = [
+      ...g[t].flatMap(xs => partir(xs, y => y.ing.comprado).map(ps => {
+        const comprado = !!ps[0].ing.comprado, id = "cc-" + ps[0].k + "-" + ps[0].ing.id;
+        return { comprado, en: Math.max(...ps.map(y => y.ing.compradoEn || 0)), li: filaCompacta(id, nombreComun(xs, y => nombreIng(y.ing)), sumaCant(ps), comprado, v => marcarIngs(ps, v)) };
+      })),
+      ...extrasAgrupados(t).flatMap(es => partir(es, ([, y]) => y.comprado).map(ps => {
+        const comprado = !!ps[0][1].comprado, id = "ce-" + ps[0][0];
+        return { comprado, en: Math.max(...ps.map(([, y]) => y.compradoEn || 0)), li: filaCompacta(id, nombreComun(es, ([, y]) => y.nombre), ps.length, comprado, v => {
+          const ahora = Date.now();
+          ps.forEach(([yid, y]) => { y.comprado = v; y.compradoEn = v ? ahora : null; saveExtra(yid); });
+        }) };
+      }))
+    ];
+    if (!rows.length) return;
+    const faltan = rows.filter(r => !r.comprado).length;
+    const box = el("section", { class: "store", style: tvars(tp) });
+    box.appendChild(el("div", { class: "store-head" }, el("h2", { class: tp.icono ? "has-icon" : null }, tp.icono ? el("span", { class: "ico", "aria-hidden": "true" }, tp.icono) : null, tp.nombre), el("span", { class: "n" }, faltan ? faltan + " de " + rows.length : "Listo")));
+    listaCompras(box, "compacta-" + t, rows);
+    shop.appendChild(box);
+  });
+  if (!shop.children.length) shop.appendChild(el("p", { class: "empty" }, "No hay nada para comprar."));
+  return el("div", {}, selectorVista(), shop);
+}
+function filaCompacta(id, nombre, cant, comprado, marcar) {
+  return el("li", { class: "item" + (comprado ? " done" : "") },
+    el("input", { type: "checkbox", id, checked: comprado, onchange: e => marcar(e.target.checked) }),
+    el("label", { for: id }, el("span", { class: "what" }, nombre)),
+    el("span", { class: "cant", "aria-label": "Cantidad " + cant }, "x" + cant));
+}
+
 function renderCompras() {
+  if (state.compacta) return renderComprasCompacta();
   const g = ingsAgrupados(itemsCompras());
   const shop = el("div", { class: "shop" });
 
@@ -699,7 +745,7 @@ function renderCompras() {
     }
     shop.appendChild(box);
   });
-  return shop;
+  return el("div", {}, selectorVista(), shop);
 }
 
 // lo de la comida de hoy que todavía no se compró
