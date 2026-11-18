@@ -253,3 +253,22 @@ button.cuenta:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .superview > .tools { display: flex; justify-content: center; }
 .superview > .hint { text-align: center; }
 .superview > .empty { padding: 6px 2px; }
+
+/* Fondo rojo terracota en la pantalla del Súper: blanco encima tiene contraste 5:1 */
+body.en-super { --super-fondo: #b94a3c; background: var(--super-fondo); }
+body.en-super::before { background: var(--surface); }
+.en-super .super-top h2, .en-super .super-top .volver, .en-super .gondola h3, .en-super .superview > .hint, .en-super .superview > .empty, .en-super .superview > .tools .linkbtn, .en-super .colors { color: #fff; }
+.en-super .super-top .volver:hover, .en-super .superview > .tools .linkbtn:hover { background: rgba(255,255,255,.15); }
+.en-super .super-top .n { background: rgba(255,255,255,.2); color: #fff; }
+.en-super .gondola h3 { color: rgba(255,255,255,.92); }
+.en-super .superview > .addrow input { box-shadow: none; }
+.en-super .superview > .addrow input:focus { box-shadow: 0 0 0 2px #fff; }
+.en-super .superview > .addrow button { background: #fff; color: var(--super-fondo); box-shadow: none; }
+.en-super .gbtn { box-shadow: 0 2px 8px rgba(60,10,5,.18); }
+.en-super .gbtn:hover { background: #fdf3f1; }
+.en-super .gbtn .cuenta { background: var(--super-fondo); color: #fff; }
+.en-super .gbtn.done { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.28); color: rgba(255,255,255,.9); box-shadow: none; }
+.en-super .gbtn.done .gemoji { opacity: .6; }
+.en-super .gbtn.done .cuenta { background: rgba(255,255,255,.2); color: #fff; }
+.en-super .swatch { border-color: var(--super-fondo); }
+.en-super .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff; }
