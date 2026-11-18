@@ -223,3 +223,33 @@ button.cuenta:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .item .why b { font-weight: 700; color: var(--ink); }
 .item.done .why b { color: var(--muted); }
 .sheet .items { padding: 0; }
+
+/* Súper en cuadrícula: la cabecera del súper en Compras abre una pantalla con un botón por producto, por góndola */
+.store-head.abre { width: 100%; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.store-head.abre:hover { background: var(--field); }
+.store-head.abre:active { transform: none; }
+.store-head .abrir { font-size: 1.4rem; line-height: 1; color: var(--accent); margin-left: 2px; }
+.superview { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.super-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.super-top .volver { padding-left: 4px; font-size: .95rem; }
+.super-top h2 { margin: 0; flex: 1; font-size: 1.2rem; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; color: var(--t, var(--ink)); }
+.super-top .n { font-size: .78rem; font-weight: 600; border-radius: 99px; padding: 2px 10px; background: var(--t-bg); color: var(--t); font-variant-numeric: tabular-nums; }
+.super-top .n:empty { display: none; }
+.superview > .addrow input { background: var(--surface); box-shadow: var(--shadow-sm); padding: 10px 12px; }
+.superview > .addrow input:focus { box-shadow: 0 0 0 2px var(--accent); }
+.gondola h3 { margin: 4px 2px 8px; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.gondola h3 .ico { font-size: 1rem; text-transform: none; }
+.gondola h3 .gn { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gbtn { position: relative; min-height: 64px; border: 1px solid transparent; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 12px; display: flex; align-items: center; gap: 10px; text-align: left; font-weight: 600; font-size: .95rem; min-width: 0; }
+.gbtn:hover { background: var(--field); }
+.gemoji { font-size: 1.6rem; line-height: 1; flex: none; }
+.gname { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.gbtn .cuenta { flex: none; font-size: .74rem; font-weight: 600; background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+.gbtn.done { background: var(--field); box-shadow: none; border-color: var(--line); color: var(--muted); font-weight: 400; }
+.gbtn.done .gname { text-decoration: line-through; }
+.gbtn.done .gemoji { opacity: .45; filter: grayscale(1); }
+.gbtn.done .cuenta { background: var(--line); color: var(--muted); }
+.superview > .tools { display: flex; justify-content: center; }
+.superview > .hint { text-align: center; }
+.superview > .empty { padding: 6px 2px; }
