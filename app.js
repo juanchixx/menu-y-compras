@@ -194,6 +194,8 @@ function render() {
   badge("badge-compras", pendientes());
   badge("badge-hoy", faltanHoy());
 
+  // la pantalla del súper tiene su propio fondo
+  document.body.classList.toggle("en-super", state.tab === "compras" && !!state.superAbierto);
   view.innerHTML = "";
   if (state.error) {
     const n = el("p", { class: "notice", role: "alert" }, state.error + " ");
