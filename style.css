@@ -274,8 +274,8 @@ body.en-super::before { background: var(--surface); }
 .en-super .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff; }
 
 /* Editar un producto: lápiz en las listas, mantener apretado en la cuadrícula */
-.item .edit { border: 0; background: none; color: var(--muted); width: 30px; height: 30px; border-radius: 99px; display: grid; place-items: center; flex: none; padding: 0; }
-.item .edit:hover { background: var(--field); color: var(--ink); }
+.item .edit, .ing .edit { border: 0; background: none; color: var(--muted); width: 30px; height: 30px; border-radius: 99px; display: grid; place-items: center; flex: none; padding: 0; }
+.item .edit:hover, .ing .edit:hover { background: var(--field); color: var(--ink); }
 .compacta .item .edit { width: 28px; height: 28px; margin-left: -4px; }
 .gbtn { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
 .editor .ed-campo { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; font-weight: 600; }
@@ -294,3 +294,4 @@ body.en-super::before { background: var(--surface); }
 .ed-btns { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
 .ed-btns .ed-quitar { margin-right: auto; color: var(--carni); padding-left: 0; }
 .ed-btns .ed-quitar:hover { background: var(--carni-bg); }
+.ing .edit { width: 28px; height: 28px; }

@@ -491,6 +491,7 @@ function renderSemana(days) {
       ul.appendChild(el("li", { class: "ing" + (ing.comprado ? " bought" : "") },
         chip,
         el("span", { class: "nm" }, nombreIng(ing), cantIng(ing) > 1 ? el("span", { class: "cant" }, " x" + cantIng(ing)) : null),
+        lapiz(nombreIng(ing), () => editar([{ k, ing }], [])),
         el("button", {
           class: "x", "aria-label": "Quitar " + ing.nombre,
           onclick: () => { const cc = comida(k); cc.ingredientes = cc.ingredientes.filter(i => i.id !== ing.id); saveComida(k); }
@@ -685,7 +686,7 @@ function filaCompacta(id, nombre, cant, comprado, abrirEditor, marcar) {
   return el("li", { class: "item" + (comprado ? " done" : "") },
     el("input", { type: "checkbox", id, checked: comprado, onchange: e => marcar(e.target.checked) }),
     el("label", { for: id }, el("span", { class: "what" }, nombre)),
-    el("span", { class: "cant", "aria-label": "Cantidad " + cant }, "x" + cant),
+    cant > 1 ? el("span", { class: "cant", "aria-label": "Cantidad " + cant }, "x" + cant) : null,
     lapiz(nombre, abrirEditor));
 }
 
@@ -1009,7 +1010,7 @@ function renderEditar() {
   btns.appendChild(el("button", { class: "btn ghost", onclick: cerrar }, "Cancelar"));
   btns.appendChild(el("button", { class: "btn", onclick: guardar }, "Guardar"));
   box.appendChild(btns);
-  if (ings.length) box.appendChild(el("p", { class: "hint" }, "Cambiar el nombre acá también lo cambia en el menú."));
+  if (ings.length) box.appendChild(el("p", { class: "hint" }, "El cambio se ve en el menú y en la lista de compras."));
   sheetEl.appendChild(box);
 }
 
@@ -1063,7 +1064,7 @@ function renderDetalle() {
   const nom = nombreComun(xs, x => nombreIng(x.ing));
   const box = el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": nom });
   const faltan = xs.filter(x => !x.ing.comprado).length;
-  box.appendChild(el("div", { class: "sheet-head" }, el("h2", {}, nom, el("span", { class: "cuenta" }, "x" + sumaCant(xs))), el("button", { class: "x", "aria-label": "Cerrar", onclick: cerrar }, "×")));
+  box.appendChild(el("div", { class: "sheet-head" }, el("h2", {}, nom, sumaCant(xs) > 1 ? el("span", { class: "cuenta" }, "x" + sumaCant(xs)) : null), el("button", { class: "x", "aria-label": "Cerrar", onclick: cerrar }, "×")));
   box.appendChild(el("p", { class: "hint" }, faltan ? (faltan === 1 ? "Falta 1 comida" : "Faltan " + faltan + " comidas") + " de " + xs.length + ". Tachá cada una por separado." : "Ya está todo tachado."));
   const ul = el("ul", { class: "items" });
   xs.forEach(x => {
