@@ -244,7 +244,7 @@ button.cuenta:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .gbtn { position: relative; min-height: 64px; border: 1px solid transparent; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 12px; display: flex; align-items: center; gap: 10px; text-align: left; font-weight: 600; font-size: .95rem; min-width: 0; }
 .gbtn:hover { background: var(--field); }
 .gemoji { font-size: 1.6rem; line-height: 1; flex: none; }
-.gname { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.gname { flex: 1; min-width: 0; overflow-wrap: break-word; hyphens: auto; line-height: 1.25; }
 .gbtn .cuenta { flex: none; font-size: .74rem; font-weight: 600; background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
 .gbtn.done { background: var(--field); box-shadow: none; border-color: var(--line); color: var(--muted); font-weight: 400; }
 .gbtn.done .gname { text-decoration: line-through; }
@@ -272,3 +272,25 @@ body.en-super::before { background: var(--surface); }
 .en-super .gbtn.done .cuenta { background: rgba(255,255,255,.2); color: #fff; }
 .en-super .swatch { border-color: var(--super-fondo); }
 .en-super .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff; }
+
+/* Editar un producto: lápiz en las listas, mantener apretado en la cuadrícula */
+.item .edit { border: 0; background: none; color: var(--muted); width: 30px; height: 30px; border-radius: 99px; display: grid; place-items: center; flex: none; padding: 0; }
+.item .edit:hover { background: var(--field); color: var(--ink); }
+.compacta .item .edit { width: 28px; height: 28px; margin-left: -4px; }
+.gbtn { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+.editor .ed-campo { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; font-weight: 600; }
+.editor input { border: 0; background: var(--field); border-radius: 12px; padding: 10px 12px; font-weight: 500; font-size: 1rem; min-width: 0; }
+.editor input:focus { background: var(--surface); box-shadow: 0 0 0 2px var(--accent); outline: none; }
+.editor .ed-sub { padding: 2px 0 0; }
+.editor .ed-sub:empty { display: none; }
+.ed-fila { display: flex; align-items: center; gap: 10px; font-size: .88rem; }
+.ed-fila > span { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--muted); }
+.ed-fila > span b { color: var(--ink); font-weight: 600; }
+.stepper { display: flex; align-items: center; gap: 4px; flex: none; }
+.stepper button { border: 0; background: var(--field); width: 36px; height: 36px; border-radius: 10px; font-size: 1.1rem; font-weight: 600; }
+.stepper button:hover { background: var(--field-hover); }
+.stepper input { width: 52px; text-align: center; padding: 8px 4px; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ed-btns { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.ed-btns .ed-quitar { margin-right: auto; color: var(--carni); padding-left: 0; }
+.ed-btns .ed-quitar:hover { background: var(--carni-bg); }

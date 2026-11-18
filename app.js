@@ -307,7 +307,7 @@ function voltear(k, section) {
 
 function renderMenu() {
   sheetEl.innerHTML = "";
-  if (!state.menu) { if (state.detalle) renderDetalle(); return; }
+  if (!state.menu) { if (state.editar) renderEditar(); else if (state.detalle) renderDetalle(); return; }
   if (state.menu === "tipos") return renderTipos();
   const cerrar = () => { state.menu = false; state.quitar = null; state.aviso = null; render(); document.getElementById("menuPersonas").focus(); };
   sheetEl.appendChild(el("div", { class: "scrim", onclick: cerrar }));
@@ -561,6 +561,8 @@ function leerCantidad(t) {
 const nombreIng = ing => ing.cantidad ? ing.nombre : leerCantidad(ing.nombre || "").nombre;
 const cantIng = ing => ing.cantidad || leerCantidad(ing.nombre || "").cantidad;
 const sumaCant = xs => xs.reduce((n, x) => n + cantIng(x.ing), 0);
+// las cosas sueltas también pueden tener cantidad; las de antes no la tienen (es 1)
+const sumaExtras = ps => ps.reduce((n, [, e]) => n + (e.cantidad || 1), 0);
 
 // la semana que se ve y todo lo planeado después, así lo de la otra semana ya aparece en la lista
 function itemsCompras() {
@@ -658,11 +660,11 @@ function renderComprasCompacta() {
     const rows = [
       ...g[t].flatMap(xs => partir(xs, y => y.ing.comprado).map(ps => {
         const comprado = !!ps[0].ing.comprado, id = "cc-" + ps[0].k + "-" + ps[0].ing.id;
-        return { comprado, en: Math.max(...ps.map(y => y.ing.compradoEn || 0)), li: filaCompacta(id, nombreComun(xs, y => nombreIng(y.ing)), sumaCant(ps), comprado, v => marcarIngs(ps, v)) };
+        return { comprado, en: Math.max(...ps.map(y => y.ing.compradoEn || 0)), li: filaCompacta(id, nombreComun(xs, y => nombreIng(y.ing)), sumaCant(ps), comprado, () => editar(ps, []), v => marcarIngs(ps, v)) };
       })),
       ...extrasAgrupados(t).flatMap(es => partir(es, ([, y]) => y.comprado).map(ps => {
         const comprado = !!ps[0][1].comprado, id = "ce-" + ps[0][0];
-        return { comprado, en: Math.max(...ps.map(([, y]) => y.compradoEn || 0)), li: filaCompacta(id, nombreComun(es, ([, y]) => y.nombre), ps.length, comprado, v => {
+        return { comprado, en: Math.max(...ps.map(([, y]) => y.compradoEn || 0)), li: filaCompacta(id, nombreComun(es, ([, y]) => y.nombre), sumaExtras(ps), comprado, () => editar([], ps), v => {
           const ahora = Date.now();
           ps.forEach(([yid, y]) => { y.comprado = v; y.compradoEn = v ? ahora : null; saveExtra(yid); });
         }) };
@@ -679,11 +681,12 @@ function renderComprasCompacta() {
   });
   return el("div", {}, selectorVista(), shop);
 }
-function filaCompacta(id, nombre, cant, comprado, marcar) {
+function filaCompacta(id, nombre, cant, comprado, abrirEditor, marcar) {
   return el("li", { class: "item" + (comprado ? " done" : "") },
     el("input", { type: "checkbox", id, checked: comprado, onchange: e => marcar(e.target.checked) }),
     el("label", { for: id }, el("span", { class: "what" }, nombre)),
-    el("span", { class: "cant", "aria-label": "Cantidad " + cant }, "x" + cant));
+    el("span", { class: "cant", "aria-label": "Cantidad " + cant }, "x" + cant),
+    lapiz(nombre, abrirEditor));
 }
 
 function renderCompras() {
@@ -712,7 +715,8 @@ function renderCompras() {
         const abrir = () => { state.detalle = { t, n: clave(nombreIng(x.ing)) }; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); };
         return { comprado, en: Math.max(...ps.map(y => y.ing.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
           el("input", { type: "checkbox", id, checked: comprado, onchange: e => marcarIngs(ps, e.target.checked) }),
-          el("label", { for: id }, el("span", { class: "what" }, nom, cuenta(sumaCant(ps), ps.length > 1 ? abrir : null)), porQue(ps))) };
+          el("label", { for: id }, el("span", { class: "what" }, nom, cuenta(sumaCant(ps), ps.length > 1 ? abrir : null)), porQue(ps)),
+          lapiz(nom, () => editar(ps, []))) };
       })));
     }
 
@@ -728,7 +732,8 @@ function renderCompras() {
         };
         return { comprado, en: Math.max(...ps.map(([, y]) => y.compradoEn || 0)), li: el("li", { class: "item" + (comprado ? " done" : "") },
           el("input", { type: "checkbox", id, checked: comprado, onchange: marcar }),
-          el("label", { for: id }, el("span", { class: "what" }, nom, cuenta(ps.length))),
+          el("label", { for: id }, el("span", { class: "what" }, nom, cuenta(sumaExtras(ps)))),
+          lapiz(nom, () => editar([], ps)),
           el("button", { class: "x", "aria-label": "Quitar " + nom, onclick: () => { ps.forEach(([yid]) => { delete state.extras[yid]; saveExtra(yid); }); } }, "×")) };
       })));
     }
@@ -737,7 +742,8 @@ function renderCompras() {
       const v = input.value.trim(); if (!v) return;
       input.value = "";
       const eid = uid();
-      state.extras[eid] = { nombre: v, tipo: t, comprado: false, creado: Date.now() };
+      const { nombre, cantidad } = leerCantidad(v);
+      state.extras[eid] = { nombre, cantidad, tipo: t, comprado: false, creado: Date.now() };
       saveExtra(eid);
     };
     input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
@@ -838,7 +844,7 @@ function renderSuper() {
     const pendIngs = g.ings.filter(y => !y.ing.comprado), pendExtras = g.extras.filter(([, e]) => !e.comprado);
     const pendiente = pendIngs.length + pendExtras.length > 0;
     // pendiente: cuenta lo que falta; ya comprado: cuenta todo
-    const cant = pendiente ? sumaCant(pendIngs) + pendExtras.length : sumaCant(g.ings) + g.extras.length;
+    const cant = pendiente ? sumaCant(pendIngs) + sumaExtras(pendExtras) : sumaCant(g.ings) + sumaExtras(g.extras);
     const en = Math.max(0, ...g.ings.map(y => y.ing.compradoEn || 0), ...g.extras.map(([, e]) => e.compradoEn || 0));
     const { emoji, gondola } = enCatalogo(nom);
     total++; if (pendiente) faltan++;
@@ -856,7 +862,8 @@ function renderSuper() {
     const v = input.value.trim(); if (!v) return;
     input.value = "";
     const eid = uid();
-    state.extras[eid] = { nombre: v, tipo: "super", comprado: false, creado: Date.now() };
+    const { nombre, cantidad } = leerCantidad(v);
+    state.extras[eid] = { nombre, cantidad, tipo: "super", comprado: false, creado: Date.now() };
     saveExtra(eid);
   };
   input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
@@ -883,13 +890,13 @@ function renderSuper() {
           x.g.extras.forEach(([eid, e]) => { e.comprado = false; e.compradoEn = null; saveExtra(eid); });
         }
       };
-      grid.appendChild(el("button", {
+      grid.appendChild(mantener(() => editar(x.g.ings, x.g.extras), el("button", {
         class: "gbtn" + (x.pendiente ? "" : " done"), "aria-pressed": String(!x.pendiente),
         "aria-label": x.nom + (x.cant > 1 ? ", " + x.cant : "") + (x.pendiente ? "" : ", comprado"), onclick: marcar
       },
         x.emoji ? el("span", { class: "gemoji", "aria-hidden": "true" }, x.emoji) : null,
         el("span", { class: "gname" }, x.nom),
-        x.cant > 1 ? el("span", { class: "cuenta" }, "x" + x.cant) : null));
+        x.cant > 1 ? el("span", { class: "cuenta" }, "x" + x.cant) : null)));
     });
     sec.appendChild(grid);
     wrap.appendChild(sec);
@@ -898,7 +905,7 @@ function renderSuper() {
   if (comprados.length) wrap.appendChild(el("div", { class: "tools" }, el("button", {
     class: "linkbtn", onclick: () => { comprados.forEach(eid => { delete state.extras[eid]; saveExtra(eid); }); }
   }, "Borrar lo ya comprado")));
-  wrap.appendChild(el("p", { class: "hint" }, "Tocá un producto para tacharlo; tocalo de nuevo si te equivocaste."));
+  wrap.appendChild(el("p", { class: "hint" }, "Tocá un producto para tacharlo; tocalo de nuevo si te equivocaste. Mantenelo apretado para cambiarle el nombre o la cantidad."));
   return wrap;
 }
 // se abre como una pantalla aparte; el botón "atrás" del celu vuelve a Compras
@@ -918,6 +925,92 @@ function cabeza(tp, n) {
   if (tp.id !== "super") return el("div", { class: "store-head" }, el("h2", { class: tp.icono ? "has-icon" : null }, ...titulo), el("span", { class: "n" }, n));
   return el("button", { class: "store-head abre", onclick: abrirSuper, "aria-label": "Abrir " + tp.nombre + " en botones" },
     el("h2", { class: tp.icono ? "has-icon" : null }, ...titulo), el("span", { class: "n" }, n), el("span", { class: "abrir", "aria-hidden": "true" }, "›"));
+}
+
+// ---------- editar un producto de la lista ----------
+const LAPIZ = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
+function lapiz(nombre, onclick) {
+  const b = el("button", { class: "edit", "aria-label": "Editar " + nombre, title: "Cambiar nombre o cantidad", onclick: e => { e.preventDefault(); onclick(); } });
+  b.innerHTML = LAPIZ;
+  return b;
+}
+// mantener apretado (o clic derecho) abre el editor; el toque corto sigue tachando
+function mantener(fn, btn) {
+  let t = null, largo = false, x0 = 0, y0 = 0;
+  const cortar = () => { clearTimeout(t); t = null; };
+  btn.addEventListener("pointerdown", e => { largo = false; x0 = e.clientX; y0 = e.clientY; cortar(); t = setTimeout(() => { largo = true; t = null; if (navigator.vibrate) try { navigator.vibrate(15); } catch (er) {} fn(); }, 500); });
+  btn.addEventListener("pointermove", e => { if (t && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cortar(); });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => btn.addEventListener(ev, cortar));
+  btn.addEventListener("click", e => { if (largo) { e.preventDefault(); e.stopImmediatePropagation(); largo = false; } }, true);
+  btn.addEventListener("contextmenu", e => { e.preventDefault(); if (!largo) { cortar(); fn(); } });
+  return btn;
+}
+// guarda solo los ids, así si llega un cambio del otro celu mientras se edita, se sigue viendo lo último
+function editar(ings, extras) {
+  state.editar = { ings: ings.map(x => ({ k: x.k, id: x.ing.id })), extras: extras.map(([eid]) => eid), draft: {} };
+  render();
+  const f = document.getElementById("ed-nombre"); if (f) { f.focus(); try { f.select(); } catch (e) {} }
+}
+function itemsEditar() {
+  const ed = state.editar;
+  const ings = ed.ings.map(({ k, id }) => {
+    const ing = ((state.comidas[k] || {}).ingredientes || []).find(i => i.id === id);
+    if (!ing) return null;
+    const c = state.comidas[k], d = parse(k), nd = DIAS[d.getDay()];
+    return { k, ing, dia: nd[0].toUpperCase() + nd.slice(1) + " " + shortDate(d), plato: c.plato };
+  }).filter(Boolean);
+  const extras = ed.extras.filter(eid => state.extras[eid]).map(eid => [eid, state.extras[eid]]);
+  return { ings, extras };
+}
+function renderEditar() {
+  const ed = state.editar, { ings, extras } = itemsEditar();
+  if (!ings.length && !extras.length) { state.editar = null; return; }
+  const cerrar = () => { state.editar = null; render(); };
+  const nombres = [...ings.map(x => nombreIng(x.ing)), ...extras.map(([, e]) => e.nombre)];
+  const actual = nombreComun(nombres, n => n);
+  if (ed.draft.nombre == null) ed.draft.nombre = actual;
+  sheetEl.appendChild(el("div", { class: "scrim", onclick: cerrar }));
+  const box = el("div", { class: "sheet editor", role: "dialog", "aria-modal": "true", "aria-label": "Editar " + actual });
+  box.appendChild(el("div", { class: "sheet-head" }, el("h2", {}, "Editar"), el("button", { class: "x", "aria-label": "Cerrar", onclick: cerrar }, "×")));
+  const nombre = el("input", { id: "ed-nombre", type: "text", value: ed.draft.nombre, "aria-label": "Nombre", maxlength: "60", oninput: e => { ed.draft.nombre = e.target.value; } });
+  box.appendChild(el("label", { class: "ed-campo" }, "Nombre", nombre));
+  // una cantidad por cada comida que lo lleva, y una para lo de la casa
+  const filas = [
+    ...ings.map(x => ({ key: x.k + "/" + x.ing.id, actual: cantIng(x.ing), label: el("span", {}, el("b", {}, x.dia), x.plato ? ", " + x.plato : "") })),
+    ...(extras.length ? [{ key: "extras", actual: sumaExtras(extras), label: el("span", {}, el("b", {}, ings.length ? "Para la casa" : "Cantidad")) }] : [])
+  ];
+  box.appendChild(el("div", { class: "sub ed-sub" }, filas.length > 1 || ings.length ? "Cantidad" : ""));
+  filas.forEach(f => {
+    if (ed.draft[f.key] == null) ed.draft[f.key] = f.actual;
+    const id = "ed-c-" + f.key.replace(/[^a-z0-9]/gi, "-");
+    const inp = el("input", { id, type: "number", inputmode: "numeric", min: "1", max: "999", value: ed.draft[f.key], "aria-label": "Cantidad", oninput: e => { ed.draft[f.key] = e.target.value; } });
+    const paso = d => { const v = Math.max(1, Math.min(999, (parseInt(inp.value, 10) || 1) + d)); inp.value = v; ed.draft[f.key] = v; };
+    box.appendChild(el("div", { class: "ed-fila" }, f.label,
+      el("div", { class: "stepper" }, el("button", { "aria-label": "Uno menos", onclick: () => paso(-1) }, "−"), inp, el("button", { "aria-label": "Uno más", onclick: () => paso(1) }, "+"))));
+  });
+  const guardar = () => {
+    const n = (ed.draft.nombre || "").trim().replace(/\s+/g, " ");
+    if (!n) { nombre.focus(); return; }
+    const cant = key => Math.max(1, Math.min(999, parseInt(ed.draft[key], 10) || 1));
+    state.editar = null;
+    const ks = new Set();
+    ings.forEach(x => { x.ing.nombre = n; x.ing.cantidad = cant(x.k + "/" + x.ing.id); ks.add(x.k); });
+    ks.forEach(saveComida);
+    // lo de la casa repetido queda en uno solo, con la cantidad total
+    extras.forEach(([eid, e], i) => {
+      if (i) { delete state.extras[eid]; saveExtra(eid); return; }
+      e.nombre = n; e.cantidad = cant("extras"); saveExtra(eid);
+    });
+    render();
+  };
+  box.addEventListener("keydown", e => { if (e.key === "Escape") cerrar(); if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); guardar(); } });
+  const btns = el("div", { class: "btns ed-btns" });
+  if (extras.length && !ings.length) btns.appendChild(el("button", { class: "linkbtn ed-quitar", onclick: () => { state.editar = null; extras.forEach(([eid]) => { delete state.extras[eid]; saveExtra(eid); }); render(); } }, "Quitar de la lista"));
+  btns.appendChild(el("button", { class: "btn ghost", onclick: cerrar }, "Cancelar"));
+  btns.appendChild(el("button", { class: "btn", onclick: guardar }, "Guardar"));
+  box.appendChild(btns);
+  if (ings.length) box.appendChild(el("p", { class: "hint" }, "Cambiar el nombre acá también lo cambia en el menú."));
+  sheetEl.appendChild(box);
 }
 
 // lo de la comida de hoy que todavía no se compró
@@ -988,7 +1081,7 @@ function renderDetalle() {
 document.getElementById("prev").onclick = () => { state.weekStart = addDays(state.weekStart, -7); render(); };
 document.getElementById("next").onclick = () => { state.weekStart = addDays(state.weekStart, 7); render(); };
 document.getElementById("hoy").onclick = () => { state.weekStart = monday(new Date()); render(); };
-function setTab(t) { const otra = state.tab !== t || state.superAbierto; state.superAbierto = false; state.tab = t; try { localStorage.setItem("tab", t); } catch (e) {} render(); if (otra) window.scrollTo(0, 0); }
+function setTab(t) { state.editar = null; const otra = state.tab !== t || state.superAbierto; state.superAbierto = false; state.tab = t; try { localStorage.setItem("tab", t); } catch (e) {} render(); if (otra) window.scrollTo(0, 0); }
 function abrirMenu(m) { state.menu = m; state.quitar = null; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); }
 document.getElementById("menuPersonas").onclick = () => abrirMenu("personas");
 document.getElementById("menuTipos").onclick = () => abrirMenu("tipos");
