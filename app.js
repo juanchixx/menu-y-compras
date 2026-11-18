@@ -186,6 +186,7 @@ function render() {
   document.getElementById("weekTitle").innerHTML =
     (state.tab === "hoy" ? "Hoy<small>" + DIAS[ahora.getDay()] + " " + shortDate(ahora) + " " + ahora.getFullYear()
       : state.tab === "semana" ? "Menú de la semana<small>" + shortDate(days[0]) + " al " + shortDate(days[6]) + " " + days[6].getFullYear()
+      : state.superAbierto ? esc(tipo("super").nombre) + "<small>todo lo que hay que comprar, por góndola"
       : "Compras<small>del " + shortDate(days[0]) + " " + days[0].getFullYear() + " en adelante") + "</small>";
   // en Hoy no hay semana para mover
   ["prev", "hoy", "next"].forEach(id => { document.getElementById(id).hidden = state.tab === "hoy"; });
@@ -236,6 +237,7 @@ function el(tag, attrs, ...kids) {
   return n;
 }
 
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function badge(id, n) { const b = document.getElementById(id); b.hidden = !n; b.textContent = n || ""; }
 
 function renderHoy() {
@@ -664,14 +666,15 @@ function renderComprasCompacta() {
         }) };
       }))
     ];
-    if (!rows.length) return;
+    // el súper siempre está, porque desde ahí se abre la cuadrícula
+    if (!rows.length && t !== "super") return;
     const faltan = rows.filter(r => !r.comprado).length;
     const box = el("section", { class: "store", style: tvars(tp) });
-    box.appendChild(el("div", { class: "store-head" }, el("h2", { class: tp.icono ? "has-icon" : null }, tp.icono ? el("span", { class: "ico", "aria-hidden": "true" }, tp.icono) : null, tp.nombre), el("span", { class: "n" }, faltan ? faltan + " de " + rows.length : "Listo")));
-    listaCompras(box, "compacta-" + t, rows);
+    box.appendChild(cabeza(tp, faltan ? faltan + " de " + rows.length : "Listo"));
+    if (rows.length) listaCompras(box, "compacta-" + t, rows);
+    else box.appendChild(el("p", { class: "empty" }, "Nada por ahora."));
     shop.appendChild(box);
   });
-  if (!shop.children.length) shop.appendChild(el("p", { class: "empty" }, "No hay nada para comprar."));
   return el("div", {}, selectorVista(), shop);
 }
 function filaCompacta(id, nombre, cant, comprado, marcar) {
@@ -682,6 +685,7 @@ function filaCompacta(id, nombre, cant, comprado, marcar) {
 }
 
 function renderCompras() {
+  if (state.superAbierto) return renderSuper();
   if (state.compacta) return renderComprasCompacta();
   const g = ingsAgrupados(itemsCompras());
   const shop = el("div", { class: "shop" });
@@ -695,7 +699,7 @@ function renderCompras() {
     // en el súper siempre se separa lo del menú de lo de la casa; en los demás, solo si hay de las dos cosas
     const separar = esSuper || (list.length && extras.length);
     const box = el("section", { class: "store", style: tvars(tp) });
-    box.appendChild(el("div", { class: "store-head" }, el("h2", { class: tp.icono ? "has-icon" : null }, tp.icono ? el("span", { class: "ico", "aria-hidden": "true" }, tp.icono) : null, tp.nombre), el("span", { class: "n" }, total ? faltan + " de " + total + " por comprar" : "")));
+    box.appendChild(cabeza(tp, total ? faltan + " de " + total + " por comprar" : ""));
 
     if (separar) box.appendChild(el("div", { class: "sub" }, "Para el menú"));
     if (!list.length && (esSuper || !extras.length)) box.appendChild(el("p", { class: "empty" }, esSuper ? "Nada del menú por ahora." : "Nada por ahora."));
@@ -746,6 +750,172 @@ function renderCompras() {
     shop.appendChild(box);
   });
   return el("div", {}, selectorVista(), shop);
+}
+
+// ---------- Súper en cuadrícula ----------
+// góndolas del súper, en el orden en que se muestran; un producto que no se reconoce va a "Otros"
+const GONDOLAS = [
+  ["almacen", "Almacén", "🥫"], ["desayuno", "Desayuno y merienda", "☕"], ["lacteos", "Lácteos y huevos", "🧀"],
+  ["verdu", "Frutas y verduras", "🥬"], ["carnes", "Carnes, fiambres y pescado", "🥩"], ["panaderia", "Panadería", "🥖"],
+  ["congelados", "Congelados", "🧊"], ["bebidas", "Bebidas", "🥤"], ["snacks", "Snacks y golosinas", "🍫"],
+  ["limpieza", "Limpieza", "🧽"], ["higiene", "Higiene personal", "🧴"], ["mascotas", "Mascotas", "🐾"], ["otros", "Otros", "🛒"]
+];
+// [palabras (sin tildes, en minúscula), emoji, góndola]; gana la primera que coincide, por eso lo más específico va antes
+const CATALOGO = [
+  ["papel higienico|papel hig", "🧻", "higiene"], ["papel de cocina|rollo de cocina|servilleta", "🧻", "limpieza"],
+  ["papel aluminio|papel film|film|bolsa", "🛍️", "limpieza"],
+  ["pasta dental|pasta de diente|dentifrico|cepillo de diente|hilo dental|enjuague", "🪥", "higiene"],
+  ["jabon en polvo|jabon liquido para ropa|jabon para ropa|suavizante|quitamancha|lavarropa", "🧺", "limpieza"],
+  ["detergente|lavavajilla|esponja|virulana|trapo|rejilla|franela", "🧽", "limpieza"],
+  ["lavandina|cif|limpiador|desengrasante|desinfectante|lysoform|blem|cera|procenex|poett|mr musculo|alcohol en gel|alcohol", "🧴", "limpieza"],
+  ["insecticida|raid|fuyi|espiral", "🪰", "limpieza"], ["escoba|secador|balde|guante", "🧹", "limpieza"],
+  ["bolsa de residuo|bolsas de residuo|bolsa de basura", "🗑️", "limpieza"], ["fosforo|encendedor", "🔥", "limpieza"],
+  ["pila", "🔋", "otros"], ["lampara|foco", "💡", "otros"], ["vela", "🕯️", "otros"],
+  ["shampoo|champu|acondicionador|crema de enjuague", "🧴", "higiene"], ["jabon", "🧼", "higiene"],
+  ["desodorante|antitranspirante|perfume|colonia", "🧴", "higiene"], ["crema de mano|crema corporal|crema facial|crema hidratante|protector solar|bronceador|repelente|off\\b", "🧴", "higiene"],
+  ["toallita|toalla femenina|tampon|protector diario|algodon|hisopo|curita|gasa", "🩹", "higiene"],
+  ["panal|panales", "👶", "higiene"], ["afeitadora|maquinita|gillette|espuma de afeitar", "🪒", "higiene"],
+  ["ibuprofeno|paracetamol|aspirina|remedio|vitamina", "💊", "higiene"], ["panuelo|carilina", "🤧", "higiene"],
+  ["comida de perro|comida de gato|alimento para|balanceado|piedritas|arena para gato|dog chow|pedigree|whiskas", "🐾", "mascotas"],
+  ["dulce de leche", "🍯", "desayuno"], ["leche", "🥛", "lacteos"], ["yogur|yoghurt|yogurt", "🥛", "lacteos"],
+  ["queso crema|casancrem|queso untable", "🧀", "lacteos"], ["queso|muzzarella|mozzarella|parmesano|reggianito|ricota", "🧀", "lacteos"],
+  ["manteca", "🧈", "lacteos"], ["crema de leche|crema", "🥛", "lacteos"], ["huevo", "🥚", "lacteos"],
+  ["helado", "🍨", "congelados"], ["hielo", "🧊", "congelados"], ["papas fritas congeladas|congelad|hamburguesa|nugget|bastoncito|patita", "🧊", "congelados"],
+  ["papas fritas|papitas|chizito|palito|mani|snack", "🍟", "snacks"], ["chocolate|alfajor", "🍫", "snacks"],
+  ["caramelo|chicle|golosina|turron|gomita", "🍬", "snacks"], ["pochoclo", "🍿", "snacks"],
+  ["galletita|galleta|oreo|criollita|bizcocho", "🍪", "desayuno"], ["cafe", "☕", "desayuno"], ["yerba|mate cocido", "🧉", "desayuno"],
+  ["te\\b|saquito", "🍵", "desayuno"], ["mermelada", "🍓", "desayuno"], ["cereal|copos|granola|avena", "🥣", "desayuno"],
+  ["miel", "🍯", "desayuno"], ["cacao|nesquik|chocolatada", "🍫", "desayuno"], ["azucar|edulcorante", "🍬", "desayuno"],
+  ["pan rallado|rebozador", "🍞", "almacen"], ["pan lactal|pan de molde|lactal", "🍞", "panaderia"],
+  ["pan\\b|panes|pancito|baguette|factura|medialuna", "🥖", "panaderia"], ["tostada", "🍞", "panaderia"],
+  ["tapa de empanada|tapas de empanada|tapa de tarta|tapas de tarta|masa", "🥟", "panaderia"], ["tortilla|rapidita|wrap", "🌯", "panaderia"],
+  ["pizza|prepizza", "🍕", "panaderia"],
+  ["vino", "🍷", "bebidas"], ["cerveza|birra", "🍺", "bebidas"], ["fernet|aperitivo|vodka|whisky|gin\\b|ron\\b", "🥃", "bebidas"],
+  ["gaseosa|coca|sprite|fanta|pepsi|soda|tonica", "🥤", "bebidas"], ["jugo", "🧃", "bebidas"], ["agua", "💧", "bebidas"],
+  ["fideo|spaghetti|tallarin|mono|tirabuzon|penne|noqui|ravioles|sorrentino|canelon|lasagna|pasta", "🍝", "almacen"],
+  ["arroz", "🍚", "almacen"], ["harina|polenta|levadura|fecula|maicena", "🌾", "almacen"],
+  ["aceite|oliva", "🫒", "almacen"], ["vinagre|aceto", "🫙", "almacen"], ["sal\\b|pimienta|oregano|condimento|especia|comino|pimenton|aji molido|nuez moscada|caldo", "🧂", "almacen"],
+  ["mayonesa|ketchup|mostaza|salsa|pure de tomate|tomate triturado|extracto de tomate", "🥫", "almacen"],
+  ["atun|caballa|sardina|lata|choclo en lata|arveja|lenteja|garbanzo|poroto", "🥫", "almacen"],
+  ["aceituna", "🫒", "almacen"], ["nuez|nueces|almendra|pasas|frutos secos|semilla|chia", "🥜", "almacen"],
+  ["pure|pure instantaneo", "🥔", "almacen"], ["gelatina|flan|postre", "🍮", "almacen"], ["bizcochuelo", "🍰", "almacen"],
+  ["jamon|salame|fiambre|mortadela|paleta|bondiola feteada|salchicha|pancho", "🥓", "carnes"],
+  ["pollo|pechuga|muslo|pata", "🍗", "carnes"], ["pescado|merluza|salmon|filet|langostino", "🐟", "carnes"],
+  ["carne|bife|milanesa|picada|molida|asado|vacio|nalga|peceto|cuadril|lomo|osobuco|matambre|cerdo|bondiola|chorizo|morcilla|costilla", "🥩", "carnes"],
+  ["tomate", "🍅", "verdu"], ["papa\\b|papas\\b", "🥔", "verdu"], ["batata", "🍠", "verdu"], ["cebolla|verdeo|puerro", "🧅", "verdu"],
+  ["ajo", "🧄", "verdu"], ["zanahoria", "🥕", "verdu"], ["lechuga|rucula|espinaca|acelga|repollo|apio", "🥬", "verdu"],
+  ["morron|pimiento|aji\\b", "🫑", "verdu"], ["zapallit|zucchini|zuchini|pepino", "🥒", "verdu"], ["zapallo|calabaza", "🎃", "verdu"],
+  ["berenjena", "🍆", "verdu"], ["choclo", "🌽", "verdu"], ["brocoli|coliflor", "🥦", "verdu"], ["hongo|champi", "🍄", "verdu"],
+  ["palta", "🥑", "verdu"], ["limon|lima\\b", "🍋", "verdu"], ["naranja|mandarina", "🍊", "verdu"], ["manzana", "🍎", "verdu"],
+  ["banana", "🍌", "verdu"], ["pera", "🍐", "verdu"], ["frutilla", "🍓", "verdu"], ["uva", "🍇", "verdu"], ["durazno", "🍑", "verdu"],
+  ["anana", "🍍", "verdu"], ["sandia", "🍉", "verdu"], ["melon", "🍈", "verdu"], ["kiwi", "🥝", "verdu"], ["cereza", "🍒", "verdu"],
+  ["perejil|albahaca|cilantro|romero|menta", "🌿", "verdu"], ["fruta", "🍎", "verdu"], ["verdura", "🥬", "verdu"],
+  ["garrafa", "🔥", "otros"]
+].map(([w, emoji, g]) => [new RegExp("(^|[^a-z])(" + w + ")"), emoji, g]);
+// lo que no está en el catálogo queda sin emoji, en "Otros"
+function enCatalogo(nombre) {
+  const n = normal(nombre);
+  const hit = CATALOGO.find(([re]) => re.test(n));
+  return hit ? { emoji: hit[1], gondola: hit[2] } : { emoji: "", gondola: "otros" };
+}
+
+// cada producto del súper (lo del menú y lo suelto juntos, sumando repetidos) como un botón; tocarlo lo tacha o lo destacha
+function renderSuper() {
+  const tp = tipo("super");
+  const items = itemsCompras().super || [];
+  const grupos = new Map();
+  const grupo = n => { const c = clave(n); if (!grupos.has(c)) grupos.set(c, { ings: [], extras: [] }); return grupos.get(c); };
+  items.forEach(x => grupo(nombreIng(x.ing)).ings.push(x));
+  Object.entries(state.extras).filter(([, e]) => tipoDe(e.tipo) === "super").sort((a, b) => (a[1].creado || 0) - (b[1].creado || 0)).forEach(p => grupo(p[1].nombre).extras.push(p));
+
+  const porGondola = {};
+  let total = 0, faltan = 0;
+  grupos.forEach((g, c) => {
+    const nombres = [...g.ings.map(y => nombreIng(y.ing)), ...g.extras.map(([, e]) => e.nombre)];
+    const nom = nombreComun(nombres, n => n);
+    const pendIngs = g.ings.filter(y => !y.ing.comprado), pendExtras = g.extras.filter(([, e]) => !e.comprado);
+    const pendiente = pendIngs.length + pendExtras.length > 0;
+    // pendiente: cuenta lo que falta; ya comprado: cuenta todo
+    const cant = pendiente ? sumaCant(pendIngs) + pendExtras.length : sumaCant(g.ings) + g.extras.length;
+    const en = Math.max(0, ...g.ings.map(y => y.ing.compradoEn || 0), ...g.extras.map(([, e]) => e.compradoEn || 0));
+    const { emoji, gondola } = enCatalogo(nom);
+    total++; if (pendiente) faltan++;
+    (porGondola[gondola] = porGondola[gondola] || []).push({ c, nom, cant, emoji, pendiente, en, g, pendIngs, pendExtras });
+  });
+
+  const wrap = el("div", { class: "superview", style: tvars(tp) });
+  wrap.appendChild(el("div", { class: "super-top" },
+    el("button", { class: "linkbtn volver", onclick: cerrarSuper }, "‹ Compras"),
+    el("h2", {}, tp.icono ? el("span", { class: "ico", "aria-hidden": "true" }, tp.icono) : null, tp.nombre),
+    el("span", { class: "n" }, total ? (faltan ? faltan + " de " + total + " por comprar" : "Listo") : "")));
+
+  const input = el("input", { id: "add-super-grid", type: "text", placeholder: "Agregar: lavandina, yerba, papel…", "aria-label": "Agregar a la lista de " + tp.nombre });
+  const add = () => {
+    const v = input.value.trim(); if (!v) return;
+    input.value = "";
+    const eid = uid();
+    state.extras[eid] = { nombre: v, tipo: "super", comprado: false, creado: Date.now() };
+    saveExtra(eid);
+  };
+  input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
+  wrap.appendChild(el("div", { class: "addrow" }, input, el("button", { onclick: add, "aria-label": "Agregar" }, "+")));
+
+  if (!total) wrap.appendChild(el("p", { class: "empty" }, "No hay nada para el súper. Sumá lo que falte acá arriba."));
+  GONDOLAS.forEach(([id, nombre, ico]) => {
+    const xs = porGondola[id];
+    if (!xs) return;
+    // lo que falta arriba (en el orden en que se cargó); lo ya comprado abajo, lo último tachado primero
+    xs.sort((a, b) => (b.pendiente - a.pendiente) || (a.pendiente ? 0 : b.en - a.en));
+    const pend = xs.filter(x => x.pendiente).length;
+    const sec = el("section", { class: "gondola" });
+    sec.appendChild(el("h3", {}, el("span", { class: "ico", "aria-hidden": "true" }, ico), nombre, el("span", { class: "gn" }, pend ? pend + " de " + xs.length : "Listo")));
+    const grid = el("div", { class: "grid2" });
+    xs.forEach(x => {
+      const marcar = () => {
+        const ahora = Date.now();
+        if (x.pendiente) {
+          if (x.pendIngs.length) marcarIngs(x.pendIngs, true);
+          x.pendExtras.forEach(([eid, e]) => { e.comprado = true; e.compradoEn = ahora; saveExtra(eid); });
+        } else {
+          if (x.g.ings.length) marcarIngs(x.g.ings, false);
+          x.g.extras.forEach(([eid, e]) => { e.comprado = false; e.compradoEn = null; saveExtra(eid); });
+        }
+      };
+      grid.appendChild(el("button", {
+        class: "gbtn" + (x.pendiente ? "" : " done"), "aria-pressed": String(!x.pendiente),
+        "aria-label": x.nom + (x.cant > 1 ? ", " + x.cant : "") + (x.pendiente ? "" : ", comprado"), onclick: marcar
+      },
+        x.emoji ? el("span", { class: "gemoji", "aria-hidden": "true" }, x.emoji) : null,
+        el("span", { class: "gname" }, x.nom),
+        x.cant > 1 ? el("span", { class: "cuenta" }, "x" + x.cant) : null));
+    });
+    sec.appendChild(grid);
+    wrap.appendChild(sec);
+  });
+  const comprados = Object.keys(state.extras).filter(eid => state.extras[eid].comprado && tipoDe(state.extras[eid].tipo) === "super");
+  if (comprados.length) wrap.appendChild(el("div", { class: "tools" }, el("button", {
+    class: "linkbtn", onclick: () => { comprados.forEach(eid => { delete state.extras[eid]; saveExtra(eid); }); }
+  }, "Borrar lo ya comprado")));
+  wrap.appendChild(el("p", { class: "hint" }, "Tocá un producto para tacharlo; tocalo de nuevo si te equivocaste."));
+  return wrap;
+}
+// se abre como una pantalla aparte; el botón "atrás" del celu vuelve a Compras
+function abrirSuper() {
+  state.superAbierto = true;
+  try { history.pushState({ super: true }, ""); } catch (e) {}
+  render(); window.scrollTo(0, 0);
+}
+function cerrarSuper() {
+  if (history.state && history.state.super) { history.back(); return; }
+  state.superAbierto = false; render(); window.scrollTo(0, 0);
+}
+window.addEventListener("popstate", () => { if (state.superAbierto) { state.superAbierto = false; render(); window.scrollTo(0, 0); } });
+// la cabecera de cada lugar; la del súper es un botón que abre la cuadrícula
+function cabeza(tp, n) {
+  const titulo = [tp.icono ? el("span", { class: "ico", "aria-hidden": "true" }, tp.icono) : null, tp.nombre];
+  if (tp.id !== "super") return el("div", { class: "store-head" }, el("h2", { class: tp.icono ? "has-icon" : null }, ...titulo), el("span", { class: "n" }, n));
+  return el("button", { class: "store-head abre", onclick: abrirSuper, "aria-label": "Abrir " + tp.nombre + " en botones" },
+    el("h2", { class: tp.icono ? "has-icon" : null }, ...titulo), el("span", { class: "n" }, n), el("span", { class: "abrir", "aria-hidden": "true" }, "›"));
 }
 
 // lo de la comida de hoy que todavía no se compró
@@ -816,7 +986,7 @@ function renderDetalle() {
 document.getElementById("prev").onclick = () => { state.weekStart = addDays(state.weekStart, -7); render(); };
 document.getElementById("next").onclick = () => { state.weekStart = addDays(state.weekStart, 7); render(); };
 document.getElementById("hoy").onclick = () => { state.weekStart = monday(new Date()); render(); };
-function setTab(t) { const otra = state.tab !== t; state.tab = t; try { localStorage.setItem("tab", t); } catch (e) {} render(); if (otra) window.scrollTo(0, 0); }
+function setTab(t) { const otra = state.tab !== t || state.superAbierto; state.superAbierto = false; state.tab = t; try { localStorage.setItem("tab", t); } catch (e) {} render(); if (otra) window.scrollTo(0, 0); }
 function abrirMenu(m) { state.menu = m; state.quitar = null; render(); const f = sheetEl.querySelector("input"); if (f) f.focus(); }
 document.getElementById("menuPersonas").onclick = () => abrirMenu("personas");
 document.getElementById("menuTipos").onclick = () => abrirMenu("tipos");
